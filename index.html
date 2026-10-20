@@ -146,18 +146,29 @@ function render(){
   v.innerHTML=subBar()+(tab==='plan'?planView():tab==='camp'?campView():resView());
 }
 const MONTHS=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-let planYear=new Date().getFullYear();
-function planItem(p){return `<div class="item" style="padding:8px 0;border-top:1px solid var(--border)"><div><div class="t" style="font-size:13px">${esc(p.title)} ${subTag(p)}<span class="badge ${p.status==='done'?'b-ok':'b-wip'}">${p.status==='done'?'مكتمل':p.status==='wip'?'جاري':'مخطط'}</span></div><div class="m">${esc((p.due||'').slice(8))?esc((p.due||'').slice(8))+' · ':''}${p.owner?esc(p.owner):''}${p.notes?' · '+esc(p.notes):''}</div></div><div><button class="s" data-act="editPlan" data-id="${p.id}">تعديل</button> <button class="s d" data-act="delPlan" data-id="${p.id}">حذف</button></div></div>`}
+const DOW=['السبت','الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة'];
+let planYear=new Date().getFullYear(),planMonth=null;
+const p2=n=>String(n).padStart(2,'0');
+function monthCells(y,m){const first=(new Date(y,m,1).getDay()+1)%7,days=new Date(y,m+1,0).getDate();const c=[];for(let i=0;i<first;i++)c.push(0);for(let d=1;d<=days;d++)c.push(d);while(c.length%7)c.push(0);return c}
+function stCls(s){return s==='done'?'background:var(--green-l);color:var(--green)':s==='wip'?'background:var(--amber-l);color:var(--amber)':'background:var(--accent-light);color:var(--accent)'}
 function planView(){
   const all=filtered(bd(brand).plans).slice().sort((a,b)=>(a.due||'').localeCompare(b.due||''));
-  const yr=all.filter(p=>(p.due||'').slice(0,4)===String(planYear)),und=all.filter(p=>!p.due);
-  const done=yr.filter(p=>p.status==='done').length,pct=yr.length?Math.round(done/yr.length*100):0;
-  const nowM=new Date().getFullYear()===planYear?new Date().getMonth():-1;
-  let h=`<div class="card"><div class="item" style="align-items:center"><div style="display:flex;align-items:center;gap:10px"><button class="s" data-act="yr" data-d="-1">›</button><div class="t" style="font-size:20px">خطة ${planYear}</div><button class="s" data-act="yr" data-d="1">‹</button></div><div class="m">${done} من ${yr.length} مكتمل (${pct}%)</div><button class="p" data-act="addPlan">+ بند جديد</button></div><div class="bar"><i style="width:${pct}%"></i></div></div><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">`;
-  for(let m=0;m<12;m++){const key=planYear+'-'+String(m+1).padStart(2,'0');const items=yr.filter(p=>p.due.slice(0,7)===key);
-    h+=`<div class="card" style="margin:0;${m===nowM?'border:2px solid var(--accent)':''}"><div class="item" style="align-items:center"><div class="t">${MONTHS[m]} <span class="badge">${items.length}</span></div><button class="s" data-act="addPlanM" data-m="${key}-01">+</button></div>${items.length?items.map(planItem).join(''):'<div class="m" style="padding:10px 0">—</div>'}</div>`}
-  h+='</div>';
-  if(und.length)h+=`<div class="card" style="margin-top:12px"><div class="t">بنود بدون تاريخ <span class="badge">${und.length}</span></div>${und.map(planItem).join('')}</div>`;
+  const und=all.filter(p=>!p.due);const today=new Date(),tk=today.getFullYear()+'-'+p2(today.getMonth()+1)+'-'+p2(today.getDate());
+  let h='';
+  if(planMonth===null){
+    const yr=all.filter(p=>(p.due||'').slice(0,4)===String(planYear)),done=yr.filter(p=>p.status==='done').length,pct=yr.length?Math.round(done/yr.length*100):0;
+    h+=`<div class="card"><div class="item" style="align-items:center"><div style="display:flex;align-items:center;gap:10px"><button class="s" data-act="yr" data-d="-1">›</button><div class="t" style="font-size:20px">${planYear}</div><button class="s" data-act="yr" data-d="1">‹</button></div><div class="m">${done} من ${yr.length} مكتمل (${pct}%)</div><button class="p" data-act="addPlan">+ بند جديد</button></div><div class="bar"><i style="width:${pct}%"></i></div></div><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">`;
+    for(let m=0;m<12;m++){const cnt={};let n=0;yr.forEach(p=>{if(+p.due.slice(5,7)===m+1){cnt[+p.due.slice(8,10)]=(cnt[+p.due.slice(8,10)]||0)+1;n++}});
+      h+=`<div class="card" data-act="openM" data-m="${m}" style="margin:0;cursor:pointer"><div class="item" style="align-items:center;margin-bottom:8px"><div class="t">${MONTHS[m]}</div><span class="badge">${n} بند</span></div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;font-size:11px">${monthCells(planYear,m).map(d=>{const k=planYear+'-'+p2(m+1)+'-'+p2(d);return d?`<div style="padding:4px 0;border-radius:6px;${cnt[d]?'background:var(--accent);color:#fff;font-weight:700':''}${k===tk?';outline:2px solid var(--green)':''}">${d}</div>`:'<div></div>'}).join('')}</div></div>`}
+    h+='</div>';
+  }else{
+    const m=planMonth,items=all.filter(p=>(p.due||'').slice(0,7)===planYear+'-'+p2(m+1));
+    h+=`<div class="card"><div class="item" style="align-items:center"><button class="s" data-act="yearV">← السنة كاملة</button><div style="display:flex;align-items:center;gap:10px"><button class="s" data-act="mv" data-d="-1">›</button><div class="t" style="font-size:20px">${MONTHS[m]} ${planYear}</div><button class="s" data-act="mv" data-d="1">‹</button></div><button class="p" data-act="addPlanM" data-m="${planYear}-${p2(m+1)}-01">+ بند جديد</button></div></div>
+    <div class="card" style="padding:8px;overflow-x:auto"><div style="display:grid;grid-template-columns:repeat(7,minmax(90px,1fr));gap:4px;min-width:660px">${DOW.map(d=>`<div style="text-align:center;font-size:12px;color:var(--muted);font-weight:700;padding:4px">${d}</div>`).join('')}${monthCells(planYear,m).map(d=>{if(!d)return '<div></div>';const k=planYear+'-'+p2(m+1)+'-'+p2(d),its=items.filter(p=>p.due===k);
+      return `<div data-act="addPlanM" data-m="${k}" style="min-height:92px;border:1px solid var(--border);border-radius:10px;padding:4px;cursor:pointer;${k===tk?'border:2px solid var(--accent);':''}"><div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:3px">${d}</div>${its.map(p=>`<div data-act="editPlan" data-id="${p.id}" title="${esc(p.title)}" style="${stCls(p.status)};font-size:11px;padding:3px 6px;border-radius:6px;margin-bottom:3px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(p.title)}</div>`).join('')}</div>`}).join('')}</div></div>
+    <div class="m" style="margin-bottom:10px">اضغط على أي يوم لإضافة بند، وعلى البند لتعديله أو حذفه. <span class="badge">مخطط</span><span class="badge b-wip">جاري</span><span class="badge b-ok">مكتمل</span></div>`;
+  }
+  if(und.length)h+=`<div class="card" style="margin-top:12px"><div class="t" style="margin-bottom:6px">بنود بدون تاريخ <span class="badge">${und.length}</span></div>${und.map(p=>`<div class="item" style="padding:6px 0;border-top:1px solid var(--border)"><div class="t" style="font-size:13px">${esc(p.title)} ${subTag(p)}</div><div><button class="s" data-act="editPlan" data-id="${p.id}">تعديل</button> <button class="s d" data-act="delPlan" data-id="${p.id}">حذف</button></div></div>`).join('')}</div>`;
   return h
 }
 function campView(){
@@ -190,7 +201,7 @@ function planForm(p,d){p=p||{};if(d&&!p.due)p.due=d;
   openModal(`<h2>${p.id?'تعديل':'إضافة'} بند خطة</h2><form id="mf"><div class="field"><label>البند</label><input id="f_title" required value="${esc(p.title||'')}"></div>${subField(p.sub)}
   <div class="row"><div class="field"><label>تاريخ التنفيذ</label><input type="date" id="f_due" value="${esc(p.due||'')}"></div><div class="field"><label>الحالة</label><select id="f_status"><option value="todo" ${p.status==='todo'?'selected':''}>مخطط</option><option value="wip" ${p.status==='wip'?'selected':''}>جاري</option><option value="done" ${p.status==='done'?'selected':''}>مكتمل</option></select></div></div>
   <div class="field"><label>المسؤول</label><input id="f_owner" value="${esc(p.owner||me.name)}"></div><div class="field"><label>ملاحظات</label><textarea id="f_notes" rows="2">${esc(p.notes||'')}</textarea></div>
-  <div style="display:flex;gap:8px"><button class="p">حفظ</button><button type="button" data-act="close">إلغاء</button></div></form>`);
+  <div style="display:flex;gap:8px"><button class="p">حفظ</button><button type="button" data-act="close">إلغاء</button>${p.id?`<button type="button" class="s d" data-act="delPlan" data-id="${p.id}">حذف</button>`:''}</div></form>`);
   $('mf').onsubmit=async e=>{e.preventDefault();const o={id:p.id||uid(),title:$('f_title').value.trim(),due:$('f_due').value,status:$('f_status').value,owner:$('f_owner').value.trim(),notes:$('f_notes').value.trim(),sub:$('f_sub')?$('f_sub').value:undefined};
     const arr=bd(brand).plans,i=arr.findIndex(x=>x.id===o.id);i>-1?arr[i]=o:arr.push(o);if(await save()){closeModal();render()}}
 }
@@ -226,8 +237,8 @@ document.addEventListener('click',async e=>{
   if(t.dataset.sub){subFilter=t.dataset.sub;render();return}
   const a=t.dataset.act,id=t.dataset.id,B=bd(brand||'karazah');
   if(a==='close')closeModal();
-  else if(a==='addPlan')planForm();else if(a==='addPlanM')planForm(null,t.dataset.m);else if(a==='yr'){planYear+=+t.dataset.d;render()}else if(a==='editPlan')planForm(B.plans.find(x=>x.id===id));
-  else if(a==='delPlan'){if(confirm('حذف البند؟')){B.plans=B.plans.filter(x=>x.id!==id);if(await save())render()}}
+  else if(a==='addPlan')planForm();else if(a==='addPlanM')planForm(null,t.dataset.m);else if(a==='yr'){planYear+=+t.dataset.d;render()}else if(a==='openM'){planMonth=+t.dataset.m;render()}else if(a==='yearV'){planMonth=null;render()}else if(a==='mv'){planMonth+=+t.dataset.d;if(planMonth<0){planMonth=11;planYear--}if(planMonth>11){planMonth=0;planYear++}render()}else if(a==='editPlan')planForm(B.plans.find(x=>x.id===id));
+  else if(a==='delPlan'){if(confirm('حذف البند؟')){B.plans=B.plans.filter(x=>x.id!==id);if(await save()){closeModal();render()}}}
   else if(a==='addCamp')campForm();else if(a==='editCamp')campForm(B.campaigns.find(x=>x.id===id));
   else if(a==='delCamp'){if(confirm('حذف الحملة؟')){B.campaigns=B.campaigns.filter(x=>x.id!==id);if(await save())render()}}
   else if(a==='brands')brandsModal();else if(a==='addBrand')brandForm();else if(a==='editBrand')brandForm(BRANDS.find(x=>x.id===id));
