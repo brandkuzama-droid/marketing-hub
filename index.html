@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>منصة التسويق - الخزامى</title>
+<style>
+:root{--accent:#023f5e;--accent-dark:#01293d;--accent-light:#e7eef2;--bg:#f5f8fa;--card:#fff;--text:#16262f;--muted:#64757e;--border:#dde5e9;--green:#2f9e56;--green-l:#e5f6ea;--amber:#b8791b;--amber-l:#fbeed9;--red:#b3261e;--r:14px;font-family:'Segoe UI',Tahoma,Arial,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text)}
+.hidden{display:none!important}
+button{font-family:inherit;font-size:13.5px;padding:8px 16px;border-radius:9px;border:1px solid var(--border);background:#fff;color:var(--text);cursor:pointer}
+button.p{background:var(--accent);color:#fff;border-color:var(--accent)}button.p:hover{background:var(--accent-dark)}
+button.s{padding:4px 10px;font-size:12px}button.d{color:var(--red)}
+input,select,textarea{font-family:inherit;font-size:13.5px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;width:100%;background:#fff;color:var(--text)}
+label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px}
+.field{margin-bottom:12px}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.gate{position:fixed;inset:0;background:linear-gradient(135deg,var(--accent),var(--accent-dark));display:flex;align-items:center;justify-content:center;padding:20px;z-index:50;flex-direction:column;gap:16px}
+.gate img{background:#fff;padding:12px 20px;border-radius:14px;max-width:220px}
+.box{background:#fff;border-radius:var(--r);padding:26px;width:100%;max-width:380px}
+.box h2{margin:0 0 14px;font-size:18px}
+.err{color:var(--red);font-size:12.5px;margin:6px 0;min-height:16px}
+.app{max-width:1150px;margin:0 auto;padding:18px}
+header{background:#fff;border:1px solid var(--border);border-radius:18px;padding:18px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px}
+header h1{margin:0;font-size:20px}header img{height:44px}
+.chip{background:var(--accent-light);color:var(--accent);padding:4px 12px;border-radius:99px;font-size:12px;font-weight:700}
+.tabs{display:inline-flex;background:#fff;border:1px solid var(--border);border-radius:99px;padding:4px;gap:2px;margin-bottom:16px;flex-wrap:wrap}
+.tab{padding:9px 20px;border-radius:99px;cursor:pointer;color:var(--muted);font-weight:600;font-size:13.5px}.tab.on{background:var(--accent);color:#fff}
+.card{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;margin-bottom:16px}
+.kpi .l{font-size:12px;color:var(--muted)}.kpi .v{font-size:22px;font-weight:800;margin-top:4px}
+.item{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.item .t{font-weight:700}.item .m{font-size:12px;color:var(--muted);margin-top:3px}
+.badge{font-size:11px;padding:2px 9px;border-radius:99px;background:var(--accent-light);color:var(--accent);margin-inline-start:6px}
+.b-ok{background:var(--green-l);color:var(--green)}.b-wip{background:var(--amber-l);color:var(--amber)}
+.bar{height:8px;background:var(--border);border-radius:9px;overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;background:var(--green)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:60;overflow:auto}
+.modal .box{max-width:520px;max-height:92vh;overflow:auto}
+.brandbtn{padding:18px;font-size:15px;font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px;border-bottom:1px solid var(--border);text-align:right}th{color:var(--muted);font-weight:600}
+.empty{color:var(--muted);text-align:center;padding:24px;font-size:13px}
+#banner{display:none;padding:10px 14px;border-radius:10px;margin-bottom:12px;font-size:13px;background:#fdeceb;color:var(--red)}
+@media(max-width:640px){.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="gate" id="login">
+  <img src="logo-alkuzama.png" alt="الخزامى">
+  <div class="box"><h2>منصة التسويق</h2>
+    <form id="loginForm">
+      <div class="field"><label>البريد الإلكتروني</label><input type="email" id="lEmail" required></div>
+      <div class="field"><label>كلمة السر</label><input type="password" id="lPass" required></div>
+      <div class="err" id="lErr"></div>
+      <button class="p" style="width:100%">دخول</button>
+    </form></div>
+</div>
+
+<div class="gate hidden" id="brandPick"><div class="box"><h2>اختر البراند</h2><div id="brandBtns" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div></div></div>
+
+<div class="app hidden" id="app">
+  <header>
+    <div style="display:flex;align-items:center;gap:14px"><img src="logo-alkuzama.png" alt=""><div><h1>منصة التسويق</h1><span class="chip" id="whoChip"></span> <span class="chip" id="brandChip"></span></div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="usersBtn" class="hidden">👥 الموظفين</button><button id="switchBtn">🔀 تبديل البراند</button><button id="outBtn">خروج</button></div>
+  </header>
+  <div id="banner"></div>
+  <div class="tabs" id="tabs">
+    <div class="tab on" data-t="plan">١ التخطيط</div>
+    <div class="tab" data-t="camp">٢ الحملات والأعمال</div>
+    <div class="tab" data-t="res">٣ النتائج</div>
+  </div>
+  <div id="view"></div>
+</div>
+
+<div class="modal hidden" id="modal"><div class="box" id="modalBox"></div></div>
+
+<script>
+const BIN_ID='6ad77431ac6210605a426c45';
+const BIN_URL='https://api.jsonbin.io/v3/b/'+BIN_ID;
+const KEY_STORE='kz_hub_master_key', SESSION='kz_hub_session', BRAND_KEY='kz_hub_brand';
+const ADMIN={email:'malik.khaleel@kuzama.co',password:'Aa727451@',name:'مالك خليل',admin:true};
+const BRANDS=[{id:'karazah',label:'كرزة'},{id:'cloud',label:'المطاعم السحابية'},{id:'shahan',label:'شاهان'}];
+const CLOUD_SUBS=['لوزية','صندويشة زمان','شهبار','ورق عنب عبلة','شهرزاد','ميسور'];
+const PLATFORMS=['Meta (فيس بوك/إنستجرام)','تيك توك','سناب شات','جوجل','X (تويتر)','مؤثرين','أخرى'];
+let DB={users:[],brands:{}}, loaded=false, me=null, brand=null, tab='plan', subFilter='all';
+
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $=id=>document.getElementById(id);
+const num=v=>{const n=parseFloat(v);return isNaN(n)?0:n};
+const fmt=(n,d=0)=>Number(n).toLocaleString('en-US',{maximumFractionDigits:d});
+const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3);
+const brandLabel=id=>(BRANDS.find(b=>b.id===id)||{}).label||id;
+function bd(id){DB.brands[id]=DB.brands[id]||{plans:[],campaigns:[]};DB.brands[id].plans=DB.brands[id].plans||[];DB.brands[id].campaigns=DB.brands[id].campaigns||[];return DB.brands[id]}
+
+/* ---------- storage ---------- */
+function masterKey(){let k=localStorage.getItem(KEY_STORE)||'';if(!k){k=(prompt('أول مرة من هذا الجهاز: ألصق مفتاح JSONBin (Master Key)')||'').trim();if(k)localStorage.setItem(KEY_STORE,k)}return k}
+function banner(m){const b=$('banner');b.textContent=m||'';b.style.display=m?'block':'none'}
+async function load(){
+  const k=masterKey();if(!k){banner('لازم تدخل مفتاح الحفظ لعرض البيانات.');return}
+  try{const r=await fetch(BIN_URL+'/latest',{cache:'no-store',headers:{'X-Master-Key':k}});
+    if(r.status==401||r.status==403){localStorage.removeItem(KEY_STORE);throw new Error('مفتاح غير صحيح')}
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const j=await r.json();DB=j.record||{};DB.users=DB.users||[];DB.brands=DB.brands||{};loaded=true;banner('')
+  }catch(e){loaded=false;banner('تعذر تحميل البيانات: '+e.message)}
+}
+async function save(){
+  if(!loaded){alert('تعذر تحميل البيانات، لن يتم الحفظ. حدّث الصفحة.');return false}
+  const k=masterKey();if(!k)return false;
+  try{const r=await fetch(BIN_URL,{method:'PUT',headers:{'Content-Type':'application/json','X-Master-Key':k},body:JSON.stringify(DB)});
+    if(!r.ok)throw new Error('HTTP '+r.status);return true
+  }catch(e){localStorage.removeItem(KEY_STORE);alert('تعذر الحفظ: '+e.message);return false}
+}
+
+/* ---------- auth ---------- */
+function findUser(email,pass){
+  email=email.trim().toLowerCase();
+  if(email===ADMIN.email&&pass===ADMIN.password)return {...ADMIN,id:'admin'};
+  const u=DB.users.find(x=>x.email.toLowerCase()===email&&x.password===pass);return u?{...u}:null
+}
+function myBrands(){return me.admin?BRANDS:BRANDS.filter(b=>(me.brands||[]).includes(b.id))}
+async function start(user){
+  me=user;localStorage.setItem(SESSION,me.email);
+  $('login').classList.add('hidden');$('app').classList.remove('hidden');
+  $('whoChip').textContent=me.name+(me.admin?' — مدير':' — موظف تسويق');
+  $('usersBtn').classList.toggle('hidden',!me.admin);
+  const saved=localStorage.getItem(BRAND_KEY),mb=myBrands();
+  if(saved&&mb.some(b=>b.id===saved))pick(saved);else if(mb.length===1)pick(mb[0].id);else showPicker();
+}
+function showPicker(){
+  const mb=myBrands();
+  $('brandBtns').innerHTML=mb.length?mb.map(b=>`<button class="brandbtn" data-b="${b.id}">${esc(b.label)}</button>`).join(''):'<div class="empty" style="grid-column:1/3">ما عندك براندات معيّنة. تواصل مع المدير.</div>';
+  $('brandPick').classList.remove('hidden');
+}
+function pick(id){brand=id;subFilter='all';localStorage.setItem(BRAND_KEY,id);$('brandChip').textContent='البراند: '+brandLabel(id);$('brandPick').classList.add('hidden');render()}
+
+/* ---------- views ---------- */
+function filtered(list){return brand==='cloud'&&subFilter!=='all'?list.filter(x=>x.sub===subFilter):list}
+function subBar(){
+  if(brand!=='cloud')return '';
+  return `<div class="tabs" style="margin-bottom:12px">${['all',...CLOUD_SUBS].map(s=>`<div class="tab ${subFilter===s?'on':''}" data-sub="${esc(s)}" style="padding:6px 14px;font-size:12.5px">${s==='all'?'كل المطاعم':esc(s)}</div>`).join('')}</div>`
+}
+function subTag(x){return x.sub?`<span class="badge">${esc(x.sub)}</span>`:''}
+function render(){
+  document.querySelectorAll('.tab[data-t]').forEach(t=>t.classList.toggle('on',t.dataset.t===tab));
+  const v=$('view');
+  v.innerHTML=subBar()+(tab==='plan'?planView():tab==='camp'?campView():resView());
+}
+function planView(){
+  const plans=filtered(bd(brand).plans).slice().sort((a,b)=>(a.due||'').localeCompare(b.due||''));
+  const done=plans.filter(p=>p.status==='done').length;
+  const pct=plans.length?Math.round(done/plans.length*100):0;
+  return `<div class="card"><div class="item"><div><div class="t">خطة العمل</div><div class="m">${done} من ${plans.length} مكتمل</div></div><button class="p" data-act="addPlan">+ بند جديد</button></div><div class="bar"><i style="width:${pct}%"></i></div></div>`+
+  (plans.length?plans.map(p=>`<div class="card item"><div><div class="t">${esc(p.title)} ${subTag(p)}<span class="badge ${p.status==='done'?'b-ok':'b-wip'}">${p.status==='done'?'مكتمل':p.status==='wip'?'جاري':'مخطط'}</span></div><div class="m">${esc(p.due||'بدون تاريخ')}${p.owner?' · '+esc(p.owner):''}${p.notes?' · '+esc(p.notes):''}</div></div><div><button class="s" data-act="editPlan" data-id="${p.id}">تعديل</button> <button class="s d" data-act="delPlan" data-id="${p.id}">حذف</button></div></div>`).join(''):'<div class="empty">ما فيه بنود في الخطة بعد.</div>');
+}
+function campView(){
+  const plans=bd(brand).plans;
+  const list=filtered(bd(brand).campaigns).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  return `<div class="card item"><div class="t">الحملات والأعمال المنفّذة</div><button class="p" data-act="addCamp">+ إضافة حملة / عمل</button></div>`+
+  (list.length?list.map(c=>{const pl=plans.find(p=>p.id===c.planId);return `<div class="card item"><div><div class="t">${esc(c.name)} ${subTag(c)}<span class="badge">${esc(c.platform||'')}</span></div><div class="m">${esc(c.date||'')} · صرف ${fmt(c.spend)} · ظهور ${fmt(c.impressions)} · نقرات ${fmt(c.clicks)} · نتائج ${fmt(c.results)}${c.revenue?' · إيراد '+fmt(c.revenue):''}${pl?' · من الخطة: '+esc(pl.title):''}</div></div><div><button class="s" data-act="editCamp" data-id="${c.id}">تعديل</button> <button class="s d" data-act="delCamp" data-id="${c.id}">حذف</button></div></div>`}).join(''):'<div class="empty">ما فيه حملات مسجّلة بعد.</div>');
+}
+function kpis(list){
+  const s={spend:0,impressions:0,clicks:0,results:0,revenue:0};
+  list.forEach(c=>{s.spend+=num(c.spend);s.impressions+=num(c.impressions);s.clicks+=num(c.clicks);s.results+=num(c.results);s.revenue+=num(c.revenue)});
+  s.ctr=s.impressions?s.clicks/s.impressions*100:0;s.cpc=s.clicks?s.spend/s.clicks:0;s.cpr=s.results?s.spend/s.results:0;s.roas=s.spend?s.revenue/s.spend:0;s.cpm=s.impressions?s.spend/s.impressions*1000:0;
+  return s
+}
+function resView(){
+  const list=filtered(bd(brand).campaigns),k=kpis(list);
+  const plans=filtered(bd(brand).plans),done=plans.filter(p=>p.status==='done').length;
+  const card=(l,v)=>`<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div></div>`;
+  const byP={};list.forEach(c=>{const p=c.platform||'أخرى';(byP[p]=byP[p]||[]).push(c)});
+  return `<div class="card" style="font-size:12.5px;color:var(--muted)">النتائج محسوبة تلقائيًا من الحملات المسجّلة. الربط المباشر مع منصات الإعلانات سيُضاف لاحقًا.</div>
+  <div class="grid">${card('إجمالي الصرف',fmt(k.spend))}${card('الظهور',fmt(k.impressions))}${card('النقرات',fmt(k.clicks))}${card('النتائج / التحويلات',fmt(k.results))}${card('CTR',fmt(k.ctr,2)+'%')}${card('CPC',fmt(k.cpc,2))}${card('CPM',fmt(k.cpm,2))}${card('تكلفة النتيجة',fmt(k.cpr,2))}${card('ROAS',fmt(k.roas,2)+'x')}${card('إنجاز الخطة',(plans.length?Math.round(done/plans.length*100):0)+'%')}${card('عدد الحملات',list.length)}</div>
+  <div class="card"><div class="t" style="margin-bottom:8px">الأداء حسب المنصة</div>${list.length?`<table><tr><th>المنصة</th><th>حملات</th><th>صرف</th><th>نقرات</th><th>نتائج</th><th>تكلفة النتيجة</th></tr>${Object.keys(byP).map(p=>{const x=kpis(byP[p]);return `<tr><td>${esc(p)}</td><td>${byP[p].length}</td><td>${fmt(x.spend)}</td><td>${fmt(x.clicks)}</td><td>${fmt(x.results)}</td><td>${fmt(x.cpr,2)}</td></tr>`}).join('')}</table>`:'<div class="empty">لا بيانات.</div>'}</div>`
+}
+
+/* ---------- modals ---------- */
+function openModal(html){$('modalBox').innerHTML=html;$('modal').classList.remove('hidden')}
+function closeModal(){$('modal').classList.add('hidden')}
+function subField(v){return brand==='cloud'?`<div class="field"><label>المطعم الفرعي</label><select id="f_sub"><option value="">-- اختر --</option>${CLOUD_SUBS.map(s=>`<option ${v===s?'selected':''}>${esc(s)}</option>`).join('')}</select></div>`:''}
+function planForm(p){p=p||{};
+  openModal(`<h2>${p.id?'تعديل':'إضافة'} بند خطة</h2><form id="mf"><div class="field"><label>البند</label><input id="f_title" required value="${esc(p.title||'')}"></div>${subField(p.sub)}
+  <div class="row"><div class="field"><label>تاريخ التنفيذ</label><input type="date" id="f_due" value="${esc(p.due||'')}"></div><div class="field"><label>الحالة</label><select id="f_status"><option value="todo" ${p.status==='todo'?'selected':''}>مخطط</option><option value="wip" ${p.status==='wip'?'selected':''}>جاري</option><option value="done" ${p.status==='done'?'selected':''}>مكتمل</option></select></div></div>
+  <div class="field"><label>المسؤول</label><input id="f_owner" value="${esc(p.owner||me.name)}"></div><div class="field"><label>ملاحظات</label><textarea id="f_notes" rows="2">${esc(p.notes||'')}</textarea></div>
+  <div style="display:flex;gap:8px"><button class="p">حفظ</button><button type="button" data-act="close">إلغاء</button></div></form>`);
+  $('mf').onsubmit=async e=>{e.preventDefault();const o={id:p.id||uid(),title:$('f_title').value.trim(),due:$('f_due').value,status:$('f_status').value,owner:$('f_owner').value.trim(),notes:$('f_notes').value.trim(),sub:$('f_sub')?$('f_sub').value:undefined};
+    const arr=bd(brand).plans,i=arr.findIndex(x=>x.id===o.id);i>-1?arr[i]=o:arr.push(o);if(await save()){closeModal();render()}}
+}
+function campForm(c){c=c||{};const plans=bd(brand).plans;
+  openModal(`<h2>${c.id?'تعديل':'إضافة'} حملة / عمل</h2><form id="mf"><div class="field"><label>الاسم</label><input id="f_name" required value="${esc(c.name||'')}"></div>${subField(c.sub)}
+  <div class="row"><div class="field"><label>المنصة</label><select id="f_plat">${PLATFORMS.map(x=>`<option ${c.platform===x?'selected':''}>${esc(x)}</option>`).join('')}</select></div><div class="field"><label>التاريخ</label><input type="date" id="f_date" value="${esc(c.date||'')}"></div></div>
+  <div class="field"><label>مرتبطة ببند في الخطة</label><select id="f_plan"><option value="">-- بدون --</option>${plans.map(p=>`<option value="${p.id}" ${c.planId===p.id?'selected':''}>${esc(p.title)}</option>`).join('')}</select></div>
+  <div class="row"><div class="field"><label>الصرف</label><input type="number" step="any" id="f_spend" value="${c.spend||''}"></div><div class="field"><label>الظهور</label><input type="number" id="f_imp" value="${c.impressions||''}"></div>
+  <div class="field"><label>النقرات</label><input type="number" id="f_clk" value="${c.clicks||''}"></div><div class="field"><label>النتائج / التحويلات</label><input type="number" id="f_res" value="${c.results||''}"></div></div>
+  <div class="field"><label>الإيراد (اختياري)</label><input type="number" step="any" id="f_rev" value="${c.revenue||''}"></div><div class="field"><label>رابط (اختياري)</label><input id="f_link" value="${esc(c.link||'')}"></div>
+  <div style="display:flex;gap:8px"><button class="p">حفظ</button><button type="button" data-act="close">إلغاء</button></div></form>`);
+  $('mf').onsubmit=async e=>{e.preventDefault();const o={id:c.id||uid(),name:$('f_name').value.trim(),platform:$('f_plat').value,date:$('f_date').value,planId:$('f_plan').value,spend:num($('f_spend').value),impressions:num($('f_imp').value),clicks:num($('f_clk').value),results:num($('f_res').value),revenue:num($('f_rev').value),link:$('f_link').value.trim(),sub:$('f_sub')?$('f_sub').value:undefined};
+    const arr=bd(brand).campaigns,i=arr.findIndex(x=>x.id===o.id);i>-1?arr[i]=o:arr.push(o);if(await save()){closeModal();render()}}
+}
+function usersModal(){
+  const rows=DB.users.map(u=>`<div class="card"><div class="item"><div><div class="t">${esc(u.name)}</div><div class="m">${esc(u.email)} · ${(u.brands||[]).map(brandLabel).join('، ')||'بدون براندات'}</div></div><div><button class="s" data-act="editUser" data-id="${u.id}">تعديل</button> <button class="s d" data-act="delUser" data-id="${u.id}">حذف</button></div></div></div>`).join('')||'<div class="empty">لا موظفين بعد.</div>';
+  openModal(`<h2>موظفو التسويق</h2>${rows}<div style="display:flex;gap:8px"><button class="p" data-act="addUser">+ موظف جديد</button><button data-act="close">إغلاق</button></div>`)
+}
+function userForm(u){u=u||{};
+  openModal(`<h2>${u.id?'تعديل':'إضافة'} موظف</h2><form id="mf"><div class="field"><label>الاسم</label><input id="f_name" required value="${esc(u.name||'')}"></div><div class="field"><label>البريد</label><input type="email" id="f_email" required value="${esc(u.email||'')}"></div><div class="field"><label>كلمة السر</label><input id="f_pass" required value="${esc(u.password||'')}"></div>
+  <div class="field"><label>البراندات المسؤول عنها</label>${BRANDS.map(b=>`<label style="display:flex;gap:8px;align-items:center;color:var(--text)"><input type="checkbox" style="width:auto" class="f_b" value="${b.id}" ${(u.brands||[]).includes(b.id)?'checked':''}>${esc(b.label)}</label>`).join('')}</div>
+  <div style="display:flex;gap:8px"><button class="p">حفظ</button><button type="button" data-act="users">رجوع</button></div></form>`);
+  $('mf').onsubmit=async e=>{e.preventDefault();const o={id:u.id||uid(),name:$('f_name').value.trim(),email:$('f_email').value.trim().toLowerCase(),password:$('f_pass').value,brands:[...document.querySelectorAll('.f_b:checked')].map(x=>x.value)};
+    if(DB.users.some(x=>x.email===o.email&&x.id!==o.id)){alert('الإيميل مستخدم');return}
+    const i=DB.users.findIndex(x=>x.id===o.id);i>-1?DB.users[i]=o:DB.users.push(o);if(await save())usersModal()}
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click',async e=>{
+  const t=e.target.closest('[data-act],[data-t],[data-sub],[data-b]');if(!t)return;
+  if(t.dataset.b){pick(t.dataset.b);return}
+  if(t.dataset.t){tab=t.dataset.t;render();return}
+  if(t.dataset.sub){subFilter=t.dataset.sub;render();return}
+  const a=t.dataset.act,id=t.dataset.id,B=bd(brand||'karazah');
+  if(a==='close')closeModal();
+  else if(a==='addPlan')planForm();else if(a==='editPlan')planForm(B.plans.find(x=>x.id===id));
+  else if(a==='delPlan'){if(confirm('حذف البند؟')){B.plans=B.plans.filter(x=>x.id!==id);if(await save())render()}}
+  else if(a==='addCamp')campForm();else if(a==='editCamp')campForm(B.campaigns.find(x=>x.id===id));
+  else if(a==='delCamp'){if(confirm('حذف الحملة؟')){B.campaigns=B.campaigns.filter(x=>x.id!==id);if(await save())render()}}
+  else if(a==='users')usersModal();else if(a==='addUser')userForm();else if(a==='editUser')userForm(DB.users.find(x=>x.id===id));
+  else if(a==='delUser'){if(confirm('حذف الموظف؟')){DB.users=DB.users.filter(x=>x.id!==id);if(await save())usersModal()}}
+});
+$('usersBtn').onclick=usersModal;
+$('switchBtn').onclick=showPicker;
+$('outBtn').onclick=()=>{localStorage.removeItem(SESSION);localStorage.removeItem(BRAND_KEY);location.reload()};
+$('loginForm').onsubmit=async e=>{e.preventDefault();
+  if(!loaded)await load();
+  const u=findUser($('lEmail').value,$('lPass').value);
+  if(!u){$('lErr').textContent='البيانات غير صحيحة';return}
+  $('lErr').textContent='';start(u)};
+(async()=>{
+  await load();
+  const s=localStorage.getItem(SESSION);
+  if(s&&loaded){const u=s===ADMIN.email?{...ADMIN,id:'admin'}:DB.users.find(x=>x.email.toLowerCase()===s);if(u)start({...u})}
+})();
+</script>
+</body>
+</html>
