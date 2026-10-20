@@ -60,7 +60,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px;borde
 <div class="app hidden" id="app">
   <header>
     <div style="display:flex;align-items:center;gap:14px"><img src="logo-alkuzama.png" alt=""><div><h1>منصة التسويق</h1><span class="chip" id="whoChip"></span> <span class="chip" id="brandChip"></span></div></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="usersBtn" class="hidden">👥 الموظفين</button><button id="switchBtn">🔀 تبديل البراند</button><button id="outBtn">خروج</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="brandsBtn" class="hidden">🏷️ البراندات</button><button id="usersBtn" class="hidden">👥 الموظفين</button><button id="switchBtn">🔀 تبديل البراند</button><button id="outBtn">خروج</button></div>
   </header>
   <div id="banner"></div>
   <div class="tabs" id="tabs">
@@ -78,8 +78,9 @@ const BIN_ID='6ad77431ac6210605a426c45';
 const BIN_URL='https://api.jsonbin.io/v3/b/'+BIN_ID;
 const KEY_STORE='kz_hub_master_key', SESSION='kz_hub_session', BRAND_KEY='kz_hub_brand';
 const ADMIN={email:'malik.khaleel@kuzama.co',password:'Aa727451@',name:'مالك خليل',admin:true};
-const BRANDS=[{id:'karazah',label:'كرزة'},{id:'cloud',label:'المطاعم السحابية'},{id:'shahan',label:'شاهان'}];
-const CLOUD_SUBS=['لوزية','صندويشة زمان','شهبار','ورق عنب عبلة','شهرزاد','ميسور'];
+const DEFAULT_BRANDS=[{id:'karazah',label:'كرزة',subs:[]},{id:'cloud',label:'المطاعم السحابية',subs:['لوزية','صندويشة زمان','شهبار','ورق عنب عبلة','شهرزاد','ميسور']},{id:'shahan',label:'شاهان',subs:[]}];
+let BRANDS=DEFAULT_BRANDS;
+function curSubs(){return (BRANDS.find(b=>b.id===brand)||{}).subs||[]}
 const PLATFORMS=['Meta (فيس بوك/إنستجرام)','تيك توك','سناب شات','جوجل','X (تويتر)','مؤثرين','أخرى'];
 let DB={users:[],brands:{}}, loaded=false, me=null, brand=null, tab='plan', subFilter='all';
 
@@ -99,7 +100,7 @@ async function load(){
   try{const r=await fetch(BIN_URL+'/latest',{cache:'no-store',headers:{'X-Master-Key':k}});
     if(r.status==401||r.status==403){localStorage.removeItem(KEY_STORE);throw new Error('مفتاح غير صحيح')}
     if(!r.ok)throw new Error('HTTP '+r.status);
-    const j=await r.json();DB=j.record||{};DB.users=DB.users||[];DB.brands=DB.brands||{};loaded=true;banner('')
+    const j=await r.json();DB=j.record||{};DB.users=DB.users||[];DB.brands=DB.brands||{};BRANDS=(DB.brandList&&DB.brandList.length)?DB.brandList:DEFAULT_BRANDS;loaded=true;banner('')
   }catch(e){loaded=false;banner('تعذر تحميل البيانات: '+e.message)}
 }
 async function save(){
@@ -121,7 +122,7 @@ async function start(user){
   me=user;localStorage.setItem(SESSION,me.email);
   $('login').classList.add('hidden');$('app').classList.remove('hidden');
   $('whoChip').textContent=me.name+(me.admin?' — مدير':' — موظف تسويق');
-  $('usersBtn').classList.toggle('hidden',!me.admin);
+  $('usersBtn').classList.toggle('hidden',!me.admin);$('brandsBtn').classList.toggle('hidden',!me.admin);
   const saved=localStorage.getItem(BRAND_KEY),mb=myBrands();
   if(saved&&mb.some(b=>b.id===saved))pick(saved);else if(mb.length===1)pick(mb[0].id);else showPicker();
 }
@@ -133,10 +134,10 @@ function showPicker(){
 function pick(id){brand=id;subFilter='all';localStorage.setItem(BRAND_KEY,id);$('brandChip').textContent='البراند: '+brandLabel(id);$('brandPick').classList.add('hidden');render()}
 
 /* ---------- views ---------- */
-function filtered(list){return brand==='cloud'&&subFilter!=='all'?list.filter(x=>x.sub===subFilter):list}
+function filtered(list){return curSubs().length&&subFilter!=='all'?list.filter(x=>x.sub===subFilter):list}
 function subBar(){
-  if(brand!=='cloud')return '';
-  return `<div class="tabs" style="margin-bottom:12px">${['all',...CLOUD_SUBS].map(s=>`<div class="tab ${subFilter===s?'on':''}" data-sub="${esc(s)}" style="padding:6px 14px;font-size:12.5px">${s==='all'?'كل المطاعم':esc(s)}</div>`).join('')}</div>`
+  if(!curSubs().length)return '';
+  return `<div class="tabs" style="margin-bottom:12px">${['all',...curSubs()].map(s=>`<div class="tab ${subFilter===s?'on':''}" data-sub="${esc(s)}" style="padding:6px 14px;font-size:12.5px">${s==='all'?'الكل':esc(s)}</div>`).join('')}</div>`
 }
 function subTag(x){return x.sub?`<span class="badge">${esc(x.sub)}</span>`:''}
 function render(){
@@ -176,7 +177,7 @@ function resView(){
 /* ---------- modals ---------- */
 function openModal(html){$('modalBox').innerHTML=html;$('modal').classList.remove('hidden')}
 function closeModal(){$('modal').classList.add('hidden')}
-function subField(v){return brand==='cloud'?`<div class="field"><label>المطعم الفرعي</label><select id="f_sub"><option value="">-- اختر --</option>${CLOUD_SUBS.map(s=>`<option ${v===s?'selected':''}>${esc(s)}</option>`).join('')}</select></div>`:''}
+function subField(v){return curSubs().length?`<div class="field"><label>الفرع / المطعم الفرعي</label><select id="f_sub"><option value="">-- اختر --</option>${curSubs().map(s=>`<option ${v===s?'selected':''}>${esc(s)}</option>`).join('')}</select></div>`:''}
 function planForm(p){p=p||{};
   openModal(`<h2>${p.id?'تعديل':'إضافة'} بند خطة</h2><form id="mf"><div class="field"><label>البند</label><input id="f_title" required value="${esc(p.title||'')}"></div>${subField(p.sub)}
   <div class="row"><div class="field"><label>تاريخ التنفيذ</label><input type="date" id="f_due" value="${esc(p.due||'')}"></div><div class="field"><label>الحالة</label><select id="f_status"><option value="todo" ${p.status==='todo'?'selected':''}>مخطط</option><option value="wip" ${p.status==='wip'?'selected':''}>جاري</option><option value="done" ${p.status==='done'?'selected':''}>مكتمل</option></select></div></div>
@@ -221,10 +222,21 @@ document.addEventListener('click',async e=>{
   else if(a==='delPlan'){if(confirm('حذف البند؟')){B.plans=B.plans.filter(x=>x.id!==id);if(await save())render()}}
   else if(a==='addCamp')campForm();else if(a==='editCamp')campForm(B.campaigns.find(x=>x.id===id));
   else if(a==='delCamp'){if(confirm('حذف الحملة؟')){B.campaigns=B.campaigns.filter(x=>x.id!==id);if(await save())render()}}
+  else if(a==='brands')brandsModal();else if(a==='addBrand')brandForm();else if(a==='editBrand')brandForm(BRANDS.find(x=>x.id===id));
+  else if(a==='delBrand'){if(confirm('حذف البراند؟ بياناته تبقى محفوظة لكنها لن تظهر.')){DB.brandList=BRANDS.filter(x=>x.id!==id);BRANDS=DB.brandList;if(await save())brandsModal()}}
   else if(a==='users')usersModal();else if(a==='addUser')userForm();else if(a==='editUser')userForm(DB.users.find(x=>x.id===id));
   else if(a==='delUser'){if(confirm('حذف الموظف؟')){DB.users=DB.users.filter(x=>x.id!==id);if(await save())usersModal()}}
 });
-$('usersBtn').onclick=usersModal;
+$('usersBtn').onclick=usersModal;$('brandsBtn').onclick=brandsModal;
+function brandsModal(){
+  openModal(`<h2>إدارة البراندات</h2>${BRANDS.map(b=>`<div class="card item"><div><div class="t">${esc(b.label)}</div><div class="m">${(b.subs||[]).length?'فروع: '+esc(b.subs.join('، ')):'بدون فروع'}</div></div><div><button class="s" data-act="editBrand" data-id="${b.id}">تعديل</button> <button class="s d" data-act="delBrand" data-id="${b.id}">حذف</button></div></div>`).join('')}<div style="display:flex;gap:8px"><button class="p" data-act="addBrand">+ براند جديد</button><button data-act="close">إغلاق</button></div>`)
+}
+function brandForm(b){b=b||{};
+  openModal(`<h2>${b.id?'تعديل':'إضافة'} براند</h2><form id="mf"><div class="field"><label>اسم البراند</label><input id="f_name" required value="${esc(b.label||'')}"></div><div class="field"><label>الفروع / المطاعم الفرعية (اختياري، كل واحد بسطر)</label><textarea id="f_subs" rows="5">${esc((b.subs||[]).join('\n'))}</textarea></div><div style="display:flex;gap:8px"><button class="p">حفظ</button><button type="button" data-act="brands">رجوع</button></div></form>`);
+  $('mf').onsubmit=async e=>{e.preventDefault();const o={id:b.id||uid(),label:$('f_name').value.trim(),subs:$('f_subs').value.split('\n').map(x=>x.trim()).filter(Boolean)};
+    const list=BRANDS.slice(),i=list.findIndex(x=>x.id===o.id);i>-1?list[i]=o:list.push(o);DB.brandList=list;BRANDS=list;
+    if(await save())brandsModal()}
+}
 $('switchBtn').onclick=showPicker;
 $('outBtn').onclick=()=>{localStorage.removeItem(SESSION);localStorage.removeItem(BRAND_KEY);location.reload()};
 $('loginForm').onsubmit=async e=>{e.preventDefault();
