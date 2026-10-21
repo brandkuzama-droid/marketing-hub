@@ -17,3 +17,4 @@ jobs:
           JSONBIN_KEY: ${{ secrets.JSONBIN_KEY }}
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          WINDSOR_KEY: ${{ secrets.WINDSOR_KEY }}
