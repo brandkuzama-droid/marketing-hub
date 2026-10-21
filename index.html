@@ -1,3 +1,7 @@
+    const base='https://connectors.windsor.ai/facebook?api_key='+encodeURIComponent(k)+'&date_preset='+range+'&fields=';
+    let r=await fetch(base+'campaign,spend,impressions,clicks,actions_purchase,actions_lead,action_values_purchase,date'),basic=false;
+    if(!r.ok&&r.status!==401&&r.status!==403){r=await fetch(base+'campaign,spend,impressions,clicks,date');basic=true}
+    if(r.status==401||r.status==403)localStorage.removeItem(WKEY);if(!r.ok)throw new Error('HTTP '+r.status);
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -151,9 +155,9 @@ async function syncMeta(auto){
       a.spend+=num(x.spend);a.impressions+=num(x.impressions);a.clicks+=num(x.clicks);a.results+=num(x.actions_purchase)+num(x.actions_lead);a.revenue+=num(x.action_values_purchase);
       const d=x.date||'';if(d&&d>a.last)a.last=d;if(d&&(!a.first||d<a.first))a.first=d});
     const B=bd(SYNC_BRAND);let n=0;
-    Object.keys(agg).forEach(name=>{const a=agg[name],id='meta:'+name;const o={id,name,platform:META_PLAT,date:a.last||new Date().toISOString().slice(0,10),spend:Math.round(a.spend*100)/100,impressions:a.impressions,clicks:a.clicks,results:a.results,revenue:Math.round(a.revenue*100)/100,link:'',auto:true,range};
+    Object.keys(agg).forEach(name=>{const a=agg[name],id='meta:'+name;const o={id,name,platform:META_PLAT,date:a.last||new Date().toISOString().slice(0,10),spend:Math.round(a.spend*100)/100,impressions:a.impressions,clicks:a.clicks,results:a.results,revenue:Math.round(a.revenue*100)/100,link:'',auto:true,range};if(basic){delete o.results;delete o.revenue}
       const i=B.campaigns.findIndex(c=>c.id===id);if(i>-1)B.campaigns[i]={...B.campaigns[i],...o};else B.campaigns.push(o);n++});
-    const ok=await save();syncMsg=ok?`تم تحديث ${n} حملة — ${new Date().toLocaleTimeString('ar-SA')}`:'تعذر حفظ النتائج'
+    const ok=await save();syncMsg=ok?`تم تحديث ${n} حملة${basic?' (بدون النتائج والإيراد — إعادة المحاولة لاحقًا)':''} — ${new Date().toLocaleTimeString('ar-SA')}`:'تعذر حفظ النتائج'
   }catch(e){syncMsg='تعذر السحب: '+e.message}
   syncing=false;render()
 }
