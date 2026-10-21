@@ -61,7 +61,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px;borde
 <div class="app hidden" id="app">
   <header>
     <div style="display:flex;align-items:center;gap:14px"><img src="logo-alkuzama.png" alt=""><div><h1>منصة التسويق</h1><span class="chip" id="whoChip"></span> <span class="chip" id="brandChip"></span></div></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="brandsBtn" class="hidden">🏷️ البراندات</button><button id="usersBtn" class="hidden">👥 الموظفين</button><button id="switchBtn">🔀 تبديل البراند</button><button id="outBtn">خروج</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="bellBtn" style="position:relative">🔔 الإشعارات<span id="bellN" class="badge b-wip hidden" style="margin-inline-start:6px"></span></button><button id="brandsBtn" class="hidden">🏷️ البراندات</button><button id="usersBtn" class="hidden">👥 الموظفين</button><button id="switchBtn">🔀 تبديل البراند</button><button id="outBtn">خروج</button></div>
   </header>
   <div id="banner"></div>
   <div class="tabs" id="tabs">
@@ -199,7 +199,7 @@ async function syncMeta(auto,forced){
       if(range.startsWith('m:'))B.campaigns=B.campaigns.filter(c=>!(c.auto&&String(c.id).startsWith('tt:')&&c.range===range));Object.keys(agg).forEach(name=>{const a=agg[name];if(!a.spend&&!a.impressions)return;upsert(B,{id:'tt:'+name+(range.startsWith('m:')?'|'+range.slice(7):''),name:name.trim(),platform:TT_PLAT,date:a.last||new Date().toISOString().slice(0,10),start:a.first||a.last||'',end:a.last||'',spend:Math.round(a.spend*100)/100,impressions:a.impressions,clicks:a.clicks,results:a.results,link:'',auto:true,range,sub:a.rule.sub},isBasic);total++});
       if(skipped)notes.push(skipped+' حملة تيك توك بدون تصنيف');
     }catch(e){notes.push('تيك توك فشل ('+e.message+')')}}
-    const ok=await save();syncMsg=(ok?`تم تحديث ${total} حملة`:'تعذر حفظ النتائج')+(notes.length?' — '+notes.join('، '):'')+' — '+new Date().toLocaleTimeString('ar-SA')
+    const ok=await save();if(ok&&total)pushLocal('تم تحديث '+total+' حملة من الربط التلقائي'+(range.startsWith('m:')?' ('+range.slice(2)+')':''));syncMsg=(ok?`تم تحديث ${total} حملة`:'تعذر حفظ النتائج')+(notes.length?' — '+notes.join('، '):'')+' — '+new Date().toLocaleTimeString('ar-SA')
   }catch(e){syncMsg='تعذر السحب: '+e.message}
   syncing=false;render()
 }
@@ -211,7 +211,7 @@ function subBar(){
   return `<div class="tabs" style="margin-bottom:12px">${['all',...curSubs()].map(s=>`<div class="tab ${subFilter===s?'on':''}" data-sub="${esc(s)}" style="padding:6px 14px;font-size:12.5px">${s==='all'?'الكل':esc(s)}</div>`).join('')}</div>`
 }
 function subTag(x){return x.sub?`<span class="badge">${esc(x.sub)}</span>`:''}
-function render(){
+function render(){try{updateBell()}catch(e){}
   document.querySelectorAll('.tab[data-t]').forEach(t=>t.classList.toggle('on',t.dataset.t===tab));
   const v=$('view');
   v.innerHTML=subBar()+(tab==='plan'?planView():tab==='camp'?campView():resView());
@@ -339,6 +339,35 @@ function userForm(u){u=u||{};
     const i=DB.users.findIndex(x=>x.id===o.id);i>-1?DB.users[i]=o:DB.users.push(o);if(await save())usersModal()}
 }
 
+
+/* ---------- Notifications ---------- */
+const LN_KEY='kz_hub_local_notifs';
+function pushLocal(text,bid){try{const a=JSON.parse(localStorage.getItem(LN_KEY)||'[]');a.unshift({ts:Date.now(),text,bid:bid||brand});localStorage.setItem(LN_KEY,JSON.stringify(a.slice(0,30)))}catch(e){}}
+function dstr(d){return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate())}
+function notifs(){
+  const now=new Date(),today=dstr(now),back=dstr(new Date(now.getFullYear(),now.getMonth(),now.getDate()-14)),fwd=dstr(new Date(now.getFullYear(),now.getMonth(),now.getDate()+7));
+  const recent=[],up=[];const add=(d,icon,text,bid,lbl)=>{if(!d)return;const e={d,ts:new Date(d+'T00:00:00').getTime(),icon,text,bid,lbl};if(d<=today&&d>=back)recent.push(e);else if(d>today&&d<=fwd)up.push(e)};
+  const mb=myBrands();const seenShared=new Set();
+  mb.forEach(b=>{const B=bd(b.id);
+    (B.plans||[]).concat(DB.sharedPlans||[]).forEach(p=>{const shared=(DB.sharedPlans||[]).includes(p);if(shared){if(seenShared.has(p.id))return;seenShared.add(p.id)}
+      const lbl=shared?'كل البراندات':b.label,bid=b.id;
+      add(p.prep,'🛠','بدأ التحضير: '+p.title,bid,lbl);add(p.due,'🚀','بدأ تنفيذ: '+p.title,bid,lbl);if(p.end&&p.end!==p.due)add(p.end,'🏁','آخر يوم تنفيذ: '+p.title,bid,lbl)});
+    (B.campaigns||[]).forEach(c=>add(c.start||c.date,'📣','بدأت حملة «'+c.name+'»'+(c.platform?' — '+c.platform:''),b.id,b.label));
+    (B.posts||[]).forEach(p=>add(p.date,'🗓',(p.status==='sent'?'نُشر منشور: ':'منشور مجدول: ')+p.text,b.id,b.label));
+  });
+  try{JSON.parse(localStorage.getItem(LN_KEY)||'[]').forEach(n=>{if(!mb.some(b=>b.id===n.bid)&&!me.admin)return;recent.push({d:dstr(new Date(n.ts)),ts:n.ts,icon:'🔄',text:n.text,bid:n.bid,lbl:brandLabel(n.bid)})})}catch(e){}
+  recent.sort((a,b)=>b.ts-a.ts);up.sort((a,b)=>a.d.localeCompare(b.d));
+  return {recent:recent.slice(0,80),up:up.slice(0,40)}
+}
+function seenKey(){return 'kz_hub_seen_'+(me?me.email:'')}
+function updateBell(){if(!me)return;const n=notifs(),seen=+localStorage.getItem(seenKey())||0,u=n.recent.filter(e=>e.ts>seen).length;const el=$('bellN');el.textContent=u>99?'99+':u;el.classList.toggle('hidden',!u)}
+function notifModal(){
+  const n=notifs(),seen=+localStorage.getItem(seenKey())||0;
+  const row=(e,isNew)=>`<div class="card item" data-act="goBrand" data-id="${e.bid}" style="cursor:pointer;margin-bottom:6px;padding:10px;${isNew?'border-inline-start:4px solid var(--accent);background:var(--accent-light)':''}"><div><div class="t" style="font-size:13px">${e.icon} ${esc(e.text)}</div><div class="m">${esc(e.d)} · ${esc(e.lbl||'')}</div></div></div>`;
+  openModal(`<h2>🔔 الإشعارات</h2><div class="t" style="margin:6px 0">قادم خلال 7 أيام (${n.up.length})</div>${n.up.length?n.up.map(e=>row(e,false)).join(''):'<div class="empty">لا شيء قادم.</div>'}<div class="t" style="margin:12px 0 6px">آخر 14 يوم (${n.recent.length})</div>${n.recent.length?n.recent.map(e=>row(e,e.ts>seen)).join(''):'<div class="empty">لا توجد إشعارات.</div>'}<button data-act="close" style="margin-top:8px">إغلاق</button>`);
+  localStorage.setItem(seenKey(),Date.now());updateBell()
+}
+
 /* ---------- events ---------- */
 document.addEventListener('click',async e=>{
   const t=e.target.closest('[data-act],[data-t],[data-sub],[data-b]');if(!t)return;
@@ -347,7 +376,7 @@ document.addEventListener('click',async e=>{
   if(t.dataset.sub){subFilter=t.dataset.sub;render();return}
   const a=t.dataset.act,id=t.dataset.id,B=bd(brand||'karazah');
   if(a==='close')closeModal();
-  else if(a==='addPlan')planForm();else if(a==='addPlanM')planForm(null,t.dataset.m);else if(a==='syncMeta')syncMeta(false);else if(a==='viewPost'){const p=(B.posts||[]).find(x=>x.id===id);if(p){const nm={x:'X (تويتر)',fb:'فيسبوك',ig:'إنستجرام',tt:'تيك توك'};openModal(`<h2>منشور Buffer</h2><div class="card"><div class="m">${esc(p.date)} · ${p.status==='sent'?'تم النشر':'مجدول'}</div><div style="margin:8px 0;white-space:pre-wrap">${esc(p.text)}</div><div class="m">القنوات: ${(p.channels||[]).map(c=>nm[c]||c).join('، ')}</div></div><button data-act="close">إغلاق</button>`)}}else if(a==='exportPlan')exportPlan();else if(a==='printPlan')monthReport();else if(a==='allMonths'){viewMonth='';render()}else if(a==='syncMonth'){const v=$('syncMonth').value;if(!v){alert('اختر الشهر أولًا');return}syncMonthVal=v;viewMonth=v;syncMeta(false,'m:'+v)}else if(a==='winKey')windsorKey(true);else if(a==='yr'){planYear+=+t.dataset.d;render()}else if(a==='openM'){planMonth=+t.dataset.m;render()}else if(a==='yearV'){planMonth=null;render()}else if(a==='mv'){planMonth+=+t.dataset.d;if(planMonth<0){planMonth=11;planYear--}if(planMonth>11){planMonth=0;planYear++}render()}else if(a==='editPlan')planForm(allPlans(B).find(x=>x.id===id));
+  else if(a==='addPlan')planForm();else if(a==='addPlanM')planForm(null,t.dataset.m);else if(a==='syncMeta')syncMeta(false);else if(a==='viewPost'){const p=(B.posts||[]).find(x=>x.id===id);if(p){const nm={x:'X (تويتر)',fb:'فيسبوك',ig:'إنستجرام',tt:'تيك توك'};openModal(`<h2>منشور Buffer</h2><div class="card"><div class="m">${esc(p.date)} · ${p.status==='sent'?'تم النشر':'مجدول'}</div><div style="margin:8px 0;white-space:pre-wrap">${esc(p.text)}</div><div class="m">القنوات: ${(p.channels||[]).map(c=>nm[c]||c).join('، ')}</div></div><button data-act="close">إغلاق</button>`)}}else if(a==='exportPlan')exportPlan();else if(a==='printPlan')monthReport();else if(a==='goBrand'){closeModal();if(id&&myBrands().some(b=>b.id===id)){tab='plan';pick(id)}}else if(a==='allMonths'){viewMonth='';render()}else if(a==='syncMonth'){const v=$('syncMonth').value;if(!v){alert('اختر الشهر أولًا');return}syncMonthVal=v;viewMonth=v;syncMeta(false,'m:'+v)}else if(a==='winKey')windsorKey(true);else if(a==='yr'){planYear+=+t.dataset.d;render()}else if(a==='openM'){planMonth=+t.dataset.m;render()}else if(a==='yearV'){planMonth=null;render()}else if(a==='mv'){planMonth+=+t.dataset.d;if(planMonth<0){planMonth=11;planYear--}if(planMonth>11){planMonth=0;planYear++}render()}else if(a==='editPlan')planForm(allPlans(B).find(x=>x.id===id));
   else if(a==='delPlan'){if(confirm('حذف البند؟')){B.plans=B.plans.filter(x=>x.id!==id);if(DB.sharedPlans)DB.sharedPlans=DB.sharedPlans.filter(x=>x.id!==id);if(await save()){closeModal();render()}}}
   else if(a==='addCamp')campForm();else if(a==='editCamp')campForm(B.campaigns.find(x=>x.id===id));
   else if(a==='delCamp'){if(confirm('حذف الحملة؟')){B.campaigns=B.campaigns.filter(x=>x.id!==id);if(await save())render()}}
@@ -357,7 +386,7 @@ document.addEventListener('click',async e=>{
   else if(a==='delUser'){if(confirm('حذف الموظف؟')){DB.users=DB.users.filter(x=>x.id!==id);if(await save())usersModal()}}
 });
 document.addEventListener('change',e=>{if(e.target&&e.target.id==='syncMonth'){viewMonth=e.target.value||'';if(viewMonth)syncMonthVal=viewMonth;render()}});
-$('usersBtn').onclick=usersModal;$('brandsBtn').onclick=brandsModal;
+$('bellBtn').onclick=notifModal;$('usersBtn').onclick=usersModal;$('brandsBtn').onclick=brandsModal;
 function brandsModal(){
   openModal(`<h2>إدارة البراندات</h2>${BRANDS.map(b=>`<div class="card item"><div><div class="t">${esc(b.label)}</div><div class="m">${(b.subs||[]).length?'فروع: '+esc(b.subs.join('، ')):'بدون فروع'}</div></div><div><button class="s" data-act="editBrand" data-id="${b.id}">تعديل</button> <button class="s d" data-act="delBrand" data-id="${b.id}">حذف</button></div></div>`).join('')}<div style="display:flex;gap:8px"><button class="p" data-act="addBrand">+ براند جديد</button><button data-act="close">إغلاق</button></div>`)
 }
