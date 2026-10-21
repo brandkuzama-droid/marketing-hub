@@ -143,7 +143,9 @@ const TT_RULES=[
 ];
 let syncing=false,syncMsg='',syncMonthVal=new Date().toISOString().slice(0,7),syncRange='m:'+syncMonthVal;
 function syncable(){return brand==='karazah'||TT_RULES.some(r=>r.brand===brand)}
-function syncBox(){if(!syncable())return '';return `<div class="card item" style="align-items:center"><div><div class="t">🔗 ربط تلقائي مع المنصات الإعلانية</div><div class="m">${esc(syncMsg||(brand==='karazah'?'Meta + تيك توك':'تيك توك'))}</div></div><div style="display:flex;gap:6px;align-items:center"><input type="month" id="syncMonth" value="${syncMonthVal}" style="width:auto"><button class="p" data-act="syncMonth" ${syncing?'disabled':''}>🔄 سحب الشهر</button><button class="s" data-act="winKey">المفتاح</button></div></div>`}
+let viewMonth='';
+function byMonth(list){if(!viewMonth)return list;const [y,m]=viewMonth.split('-').map(Number),ms=viewMonth+'-01',me=viewMonth+'-'+String(new Date(y,m,0).getDate()).padStart(2,'0');return list.filter(c=>{const st=c.start||c.date||'',en=c.end||c.date||'';return st&&st<=me&&en>=ms})}
+function syncBox(){const sy=syncable();return `<div class="card item" style="align-items:center"><div><div class="t">📅 ${sy?'الشهر + الربط التلقائي (Meta / تيك توك)':'الشهر'}</div><div class="m">${esc(syncMsg||(viewMonth?'عرض حملات '+viewMonth+' فقط':'عرض كل الأشهر'))}</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input type="month" id="syncMonth" value="${viewMonth||syncMonthVal}" style="width:auto"><button class="s" data-act="allMonths">كل الأشهر</button>${sy?`<button class="p" data-act="syncMonth" ${syncing?'disabled':''}>🔄 سحب الشهر</button><button class="s" data-act="winKey">المفتاح</button>`:''}</div></div>`}
 function windsorKey(force){let k=localStorage.getItem(WKEY)||'';if(!k||force){k=(prompt('ألصق مفتاح Windsor API (من حسابك في Windsor.ai)',force?k:'')||'').trim();if(k)localStorage.setItem(WKEY,k)}return k}
 function ttMatch(name){const n=String(name||'').toLowerCase();for(const r of TT_RULES){if(r.kw.some(w=>n.includes(w.toLowerCase())))return r}return null}
 function rangeChunks(range){
@@ -240,7 +242,7 @@ function planView(){
 }
 function campView(){
   const plans=bd(brand).plans;
-  const list=filtered(bd(brand).campaigns).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const list=byMonth(filtered(bd(brand).campaigns)).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   return syncBox()+`<div class="card item"><div class="t">الحملات والأعمال المنفّذة</div><button class="p" data-act="addCamp">+ إضافة حملة / عمل</button></div>`+
   (list.length?list.map(c=>{const pl=plans.find(p=>p.id===c.planId);return `<div class="card item"><div><div class="t">${esc(c.name)} ${subTag(c)}<span class="badge">${esc(c.platform||'')}</span>${c.auto?'<span class="badge b-ok">تلقائي</span>':''}</div><div class="m">${esc(c.date||'')} · صرف ${fmt(c.spend)} · ظهور ${fmt(c.impressions)} · نقرات ${fmt(c.clicks)} · نتائج ${fmt(c.results)}${c.revenue?' · إيراد '+fmt(c.revenue):''}${pl?' · من الخطة: '+esc(pl.title):''}</div></div><div><button class="s" data-act="editCamp" data-id="${c.id}">تعديل</button> <button class="s d" data-act="delCamp" data-id="${c.id}">حذف</button></div></div>`}).join(''):'<div class="empty">ما فيه حملات مسجّلة بعد.</div>');
 }
@@ -251,8 +253,8 @@ function kpis(list){
   return s
 }
 function resView(){
-  const list=filtered(bd(brand).campaigns),k=kpis(list);
-  const plans=filtered(bd(brand).plans),done=plans.filter(p=>p.status==='done').length;
+  const list=byMonth(filtered(bd(brand).campaigns)),k=kpis(list);
+  const plans=filtered(bd(brand).plans).filter(p=>!viewMonth||(p.due||'').slice(0,7)===viewMonth),done=plans.filter(p=>p.status==='done').length;
   const card=(l,v)=>`<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div></div>`;
   const byP={};list.forEach(c=>{const p=c.platform||'أخرى';(byP[p]=byP[p]||[]).push(c)});
   return syncBox()+`<div class="card" style="font-size:12.5px;color:var(--muted)">النتائج محسوبة تلقائيًا من الحملات المسجّلة. حملات Meta وتيك توك تُسحب تلقائيًا.</div>
@@ -304,7 +306,7 @@ document.addEventListener('click',async e=>{
   if(t.dataset.sub){subFilter=t.dataset.sub;render();return}
   const a=t.dataset.act,id=t.dataset.id,B=bd(brand||'karazah');
   if(a==='close')closeModal();
-  else if(a==='addPlan')planForm();else if(a==='addPlanM')planForm(null,t.dataset.m);else if(a==='syncMeta')syncMeta(false);else if(a==='syncMonth'){const v=$('syncMonth').value;if(!v){alert('اختر الشهر أولًا');return}syncMonthVal=v;syncMeta(false,'m:'+v)}else if(a==='winKey')windsorKey(true);else if(a==='yr'){planYear+=+t.dataset.d;render()}else if(a==='openM'){planMonth=+t.dataset.m;render()}else if(a==='yearV'){planMonth=null;render()}else if(a==='mv'){planMonth+=+t.dataset.d;if(planMonth<0){planMonth=11;planYear--}if(planMonth>11){planMonth=0;planYear++}render()}else if(a==='editPlan')planForm(B.plans.find(x=>x.id===id));
+  else if(a==='addPlan')planForm();else if(a==='addPlanM')planForm(null,t.dataset.m);else if(a==='syncMeta')syncMeta(false);else if(a==='allMonths'){viewMonth='';render()}else if(a==='syncMonth'){const v=$('syncMonth').value;if(!v){alert('اختر الشهر أولًا');return}syncMonthVal=v;viewMonth=v;syncMeta(false,'m:'+v)}else if(a==='winKey')windsorKey(true);else if(a==='yr'){planYear+=+t.dataset.d;render()}else if(a==='openM'){planMonth=+t.dataset.m;render()}else if(a==='yearV'){planMonth=null;render()}else if(a==='mv'){planMonth+=+t.dataset.d;if(planMonth<0){planMonth=11;planYear--}if(planMonth>11){planMonth=0;planYear++}render()}else if(a==='editPlan')planForm(B.plans.find(x=>x.id===id));
   else if(a==='delPlan'){if(confirm('حذف البند؟')){B.plans=B.plans.filter(x=>x.id!==id);if(await save()){closeModal();render()}}}
   else if(a==='addCamp')campForm();else if(a==='editCamp')campForm(B.campaigns.find(x=>x.id===id));
   else if(a==='delCamp'){if(confirm('حذف الحملة؟')){B.campaigns=B.campaigns.filter(x=>x.id!==id);if(await save())render()}}
@@ -313,6 +315,7 @@ document.addEventListener('click',async e=>{
   else if(a==='users')usersModal();else if(a==='addUser')userForm();else if(a==='editUser')userForm(DB.users.find(x=>x.id===id));
   else if(a==='delUser'){if(confirm('حذف الموظف؟')){DB.users=DB.users.filter(x=>x.id!==id);if(await save())usersModal()}}
 });
+document.addEventListener('change',e=>{if(e.target&&e.target.id==='syncMonth'){viewMonth=e.target.value||'';if(viewMonth)syncMonthVal=viewMonth;render()}});
 $('usersBtn').onclick=usersModal;$('brandsBtn').onclick=brandsModal;
 function brandsModal(){
   openModal(`<h2>إدارة البراندات</h2>${BRANDS.map(b=>`<div class="card item"><div><div class="t">${esc(b.label)}</div><div class="m">${(b.subs||[]).length?'فروع: '+esc(b.subs.join('، ')):'بدون فروع'}</div></div><div><button class="s" data-act="editBrand" data-id="${b.id}">تعديل</button> <button class="s d" data-act="delBrand" data-id="${b.id}">حذف</button></div></div>`).join('')}<div style="display:flex;gap:8px"><button class="p" data-act="addBrand">+ براند جديد</button><button data-act="close">إغلاق</button></div>`)
