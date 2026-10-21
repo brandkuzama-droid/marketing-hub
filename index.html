@@ -141,15 +141,16 @@ const TT_RULES=[
  {brand:'cloud',sub:'ورق عنب عبلة',kw:['ورق عنب','ورق العنب']},
  {brand:'karazah',kw:['كرزة','الجاذرينج','الجاذرينغ','فطور','غداء','عشاء','سحور','مؤثرين','بلوجر','البلوجر','عيد','كرمبلد','رمضان','ramadan','brek','منشورات الحساب','مقاطع']}
 ];
-let syncing=false,syncMsg='',syncRange='last_30d';
+let syncing=false,syncMsg='',syncRange='last_30d',syncMonthVal=new Date().toISOString().slice(0,7);
 function syncable(){return brand==='karazah'||TT_RULES.some(r=>r.brand===brand)}
-function syncBox(){if(!syncable())return '';return `<div class="card item" style="align-items:center"><div><div class="t">🔗 ربط تلقائي مع المنصات الإعلانية</div><div class="m">${esc(syncMsg||(brand==='karazah'?'Meta + تيك توك':'تيك توك'))}</div></div><div style="display:flex;gap:6px;align-items:center"><select id="syncRange" style="width:auto"><option value="last_7d" ${syncRange==='last_7d'?'selected':''}>آخر 7 أيام</option><option value="last_30d" ${syncRange==='last_30d'?'selected':''}>آخر 30 يوم</option><option value="last_90d" ${syncRange==='last_90d'?'selected':''}>آخر 90 يوم</option><option value="y:cur" ${syncRange==='y:cur'?'selected':''}>هذه السنة (من يناير)</option><option value="y:prev" ${syncRange==='y:prev'?'selected':''}>السنة الماضية</option><option value="last_365d" ${syncRange==='last_365d'?'selected':''}>آخر 365 يوم</option></select><button class="p" data-act="syncMeta" ${syncing?'disabled':''}>${syncing?'جاري السحب...':'🔄 تحديث'}</button><button class="s" data-act="winKey">المفتاح</button></div></div>`}
+function syncBox(){if(!syncable())return '';return `<div class="card item" style="align-items:center"><div><div class="t">🔗 ربط تلقائي مع المنصات الإعلانية</div><div class="m">${esc(syncMsg||(brand==='karazah'?'Meta + تيك توك':'تيك توك'))}</div></div><div style="display:flex;gap:6px;align-items:center"><select id="syncRange" style="width:auto"><option value="last_7d" ${syncRange==='last_7d'?'selected':''}>آخر 7 أيام</option><option value="last_30d" ${syncRange==='last_30d'?'selected':''}>آخر 30 يوم</option><option value="last_90d" ${syncRange==='last_90d'?'selected':''}>آخر 90 يوم</option><option value="y:cur" ${syncRange==='y:cur'?'selected':''}>هذه السنة (من يناير)</option><option value="y:prev" ${syncRange==='y:prev'?'selected':''}>السنة الماضية</option><option value="last_365d" ${syncRange==='last_365d'?'selected':''}>آخر 365 يوم</option></select><input type="month" id="syncMonth" value="${syncMonthVal}" style="width:auto"><button class="s" data-act="syncMonth" ${syncing?'disabled':''}>سحب هذا الشهر</button><button class="p" data-act="syncMeta" ${syncing?'disabled':''}>${syncing?'جاري السحب...':'🔄 تحديث'}</button><button class="s" data-act="winKey">المفتاح</button></div></div>`}
 function windsorKey(force){let k=localStorage.getItem(WKEY)||'';if(!k||force){k=(prompt('ألصق مفتاح Windsor API (من حسابك في Windsor.ai)',force?k:'')||'').trim();if(k)localStorage.setItem(WKEY,k)}return k}
 function ttMatch(name){const n=String(name||'').toLowerCase();for(const r of TT_RULES){if(r.kw.some(w=>n.includes(w.toLowerCase())))return r}return null}
 function rangeChunks(range){
   const pd=n=>String(n).padStart(2,'0'),ymd=d=>d.getFullYear()+'-'+pd(d.getMonth()+1)+'-'+pd(d.getDate());
   if(range==='last_7d'||range==='last_30d'||range==='last_90d')return [{q:'date_preset='+range}];
   const now=new Date();let start,end;
+  if(range.startsWith('m:')){const [yy,mm]=range.slice(2).split('-').map(Number);start=new Date(yy,mm-1,1);end=new Date(yy,mm,0);if(end>now)end=now;return [{q:'date_from='+ymd(start)+'&date_to='+ymd(end)}]}
   if(range==='y:prev'){start=new Date(now.getFullYear()-1,0,1);end=new Date(now.getFullYear()-1,11,31)}
   else if(range==='y:cur'){start=new Date(now.getFullYear(),0,1);end=now}
   else{end=now;start=new Date(now.getFullYear(),now.getMonth(),now.getDate()-364)}
@@ -173,10 +174,10 @@ async function wfetch(k,conn,range,full,basic){
   return {rows:res.flat(),isBasic}
 }
 function upsert(B,o,basic){const i=B.campaigns.findIndex(c=>c.id===o.id);if(basic){delete o.results;delete o.revenue}if(i>-1)B.campaigns[i]={...B.campaigns[i],...o};else B.campaigns.push(o)}
-async function syncMeta(auto){
+async function syncMeta(auto,forced){
   if(syncing||!syncable())return;
   const k=auto?localStorage.getItem(WKEY):windsorKey();if(!k)return;
-  const sel=$('syncRange'),range=sel?sel.value:syncRange;syncRange=range;
+  const sel=$('syncRange'),range=forced||(sel?sel.value:syncRange);syncRange=range;
   syncing=true;syncMsg='جاري سحب الحملات...';render();
   const notes=[];let total=0;
   try{
@@ -303,7 +304,7 @@ document.addEventListener('click',async e=>{
   if(t.dataset.sub){subFilter=t.dataset.sub;render();return}
   const a=t.dataset.act,id=t.dataset.id,B=bd(brand||'karazah');
   if(a==='close')closeModal();
-  else if(a==='addPlan')planForm();else if(a==='addPlanM')planForm(null,t.dataset.m);else if(a==='syncMeta')syncMeta(false);else if(a==='winKey')windsorKey(true);else if(a==='yr'){planYear+=+t.dataset.d;render()}else if(a==='openM'){planMonth=+t.dataset.m;render()}else if(a==='yearV'){planMonth=null;render()}else if(a==='mv'){planMonth+=+t.dataset.d;if(planMonth<0){planMonth=11;planYear--}if(planMonth>11){planMonth=0;planYear++}render()}else if(a==='editPlan')planForm(B.plans.find(x=>x.id===id));
+  else if(a==='addPlan')planForm();else if(a==='addPlanM')planForm(null,t.dataset.m);else if(a==='syncMeta')syncMeta(false);else if(a==='syncMonth'){const v=$('syncMonth').value;if(!v){alert('اختر الشهر أولًا');return}syncMonthVal=v;syncMeta(false,'m:'+v)}else if(a==='winKey')windsorKey(true);else if(a==='yr'){planYear+=+t.dataset.d;render()}else if(a==='openM'){planMonth=+t.dataset.m;render()}else if(a==='yearV'){planMonth=null;render()}else if(a==='mv'){planMonth+=+t.dataset.d;if(planMonth<0){planMonth=11;planYear--}if(planMonth>11){planMonth=0;planYear++}render()}else if(a==='editPlan')planForm(B.plans.find(x=>x.id===id));
   else if(a==='delPlan'){if(confirm('حذف البند؟')){B.plans=B.plans.filter(x=>x.id!==id);if(await save()){closeModal();render()}}}
   else if(a==='addCamp')campForm();else if(a==='editCamp')campForm(B.campaigns.find(x=>x.id===id));
   else if(a==='delCamp'){if(confirm('حذف الحملة؟')){B.campaigns=B.campaigns.filter(x=>x.id!==id);if(await save())render()}}
