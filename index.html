@@ -1,7 +1,3 @@
-    const base='https://connectors.windsor.ai/facebook?api_key='+encodeURIComponent(k)+'&date_preset='+range+'&fields=';
-    let r=await fetch(base+'campaign,spend,impressions,clicks,actions_purchase,actions_lead,action_values_purchase,date'),basic=false;
-    if(!r.ok&&r.status!==401&&r.status!==403){r=await fetch(base+'campaign,spend,impressions,clicks,date');basic=true}
-    if(r.status==401||r.status==403)localStorage.removeItem(WKEY);if(!r.ok)throw new Error('HTTP '+r.status);
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -147,15 +143,31 @@ const TT_RULES=[
 ];
 let syncing=false,syncMsg='',syncRange='last_30d';
 function syncable(){return brand==='karazah'||TT_RULES.some(r=>r.brand===brand)}
-function syncBox(){if(!syncable())return '';return `<div class="card item" style="align-items:center"><div><div class="t">🔗 ربط تلقائي مع المنصات الإعلانية</div><div class="m">${esc(syncMsg||(brand==='karazah'?'Meta + تيك توك':'تيك توك'))}</div></div><div style="display:flex;gap:6px;align-items:center"><select id="syncRange" style="width:auto"><option value="last_7d" ${syncRange==='last_7d'?'selected':''}>آخر 7 أيام</option><option value="last_30d" ${syncRange==='last_30d'?'selected':''}>آخر 30 يوم</option><option value="last_90d" ${syncRange==='last_90d'?'selected':''}>آخر 90 يوم</option></select><button class="p" data-act="syncMeta" ${syncing?'disabled':''}>${syncing?'جاري السحب...':'🔄 تحديث'}</button><button class="s" data-act="winKey">المفتاح</button></div></div>`}
+function syncBox(){if(!syncable())return '';return `<div class="card item" style="align-items:center"><div><div class="t">🔗 ربط تلقائي مع المنصات الإعلانية</div><div class="m">${esc(syncMsg||(brand==='karazah'?'Meta + تيك توك':'تيك توك'))}</div></div><div style="display:flex;gap:6px;align-items:center"><select id="syncRange" style="width:auto"><option value="last_7d" ${syncRange==='last_7d'?'selected':''}>آخر 7 أيام</option><option value="last_30d" ${syncRange==='last_30d'?'selected':''}>آخر 30 يوم</option><option value="last_90d" ${syncRange==='last_90d'?'selected':''}>آخر 90 يوم</option><option value="y:cur" ${syncRange==='y:cur'?'selected':''}>هذه السنة (من يناير)</option><option value="y:prev" ${syncRange==='y:prev'?'selected':''}>السنة الماضية</option><option value="last_365d" ${syncRange==='last_365d'?'selected':''}>آخر 365 يوم</option></select><button class="p" data-act="syncMeta" ${syncing?'disabled':''}>${syncing?'جاري السحب...':'🔄 تحديث'}</button><button class="s" data-act="winKey">المفتاح</button></div></div>`}
 function windsorKey(force){let k=localStorage.getItem(WKEY)||'';if(!k||force){k=(prompt('ألصق مفتاح Windsor API (من حسابك في Windsor.ai)',force?k:'')||'').trim();if(k)localStorage.setItem(WKEY,k)}return k}
 function ttMatch(name){const n=String(name||'').toLowerCase();for(const r of TT_RULES){if(r.kw.some(w=>n.includes(w.toLowerCase())))return r}return null}
+function rangeChunks(range){
+  const pd=n=>String(n).padStart(2,'0'),ymd=d=>d.getFullYear()+'-'+pd(d.getMonth()+1)+'-'+pd(d.getDate());
+  if(range==='last_7d'||range==='last_30d'||range==='last_90d')return [{q:'date_preset='+range}];
+  const now=new Date();let start,end;
+  if(range==='y:prev'){start=new Date(now.getFullYear()-1,0,1);end=new Date(now.getFullYear()-1,11,31)}
+  else if(range==='y:cur'){start=new Date(now.getFullYear(),0,1);end=now}
+  else{end=now;start=new Date(now.getFullYear(),now.getMonth(),now.getDate()-364)}
+  const out=[];let c=new Date(start.getFullYear(),start.getMonth(),1);
+  while(c<=end){const f=c<start?start:c,l=new Date(c.getFullYear(),c.getMonth()+1,0),t=l>end?end:l;out.push({q:'date_from='+ymd(f)+'&date_to='+ymd(t)});c=new Date(c.getFullYear(),c.getMonth()+1,1)}
+  return out
+}
 async function wfetch(k,conn,range,full,basic){
-  let r=await fetch('https://connectors.windsor.ai/'+conn+'?api_key='+encodeURIComponent(k)+'&date_preset='+range+'&fields='+full),isBasic=false;
-  if(!r.ok&&r.status!==401&&r.status!==403&&basic){r=await fetch('https://connectors.windsor.ai/'+conn+'?api_key='+encodeURIComponent(k)+'&date_preset='+range+'&fields='+basic);isBasic=true}
-  if(r.status==401||r.status==403)localStorage.removeItem(WKEY);
-  if(!r.ok)throw new Error(conn+': HTTP '+r.status);
-  const j=await r.json(),rows=j.data||j;if(!Array.isArray(rows))throw new Error('رد غير متوقع');return {rows,isBasic}
+  const rows=[];let isBasic=false;
+  for(const ch of rangeChunks(range)){
+    const u=f=>'https://connectors.windsor.ai/'+conn+'?api_key='+encodeURIComponent(k)+'&'+ch.q+'&fields='+f;
+    let r=await fetch(u(full));
+    if(!r.ok&&r.status!==401&&r.status!==403&&basic){r=await fetch(u(basic));isBasic=true}
+    if(r.status==401||r.status==403)localStorage.removeItem(WKEY);
+    if(!r.ok)throw new Error(conn+': HTTP '+r.status);
+    const j=await r.json(),d=j.data||j;if(!Array.isArray(d))throw new Error('رد غير متوقع');rows.push(...d)
+  }
+  return {rows,isBasic}
 }
 function upsert(B,o,basic){const i=B.campaigns.findIndex(c=>c.id===o.id);if(basic){delete o.results;delete o.revenue}if(i>-1)B.campaigns[i]={...B.campaigns[i],...o};else B.campaigns.push(o)}
 async function syncMeta(auto){
