@@ -11,7 +11,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&am
 const TT_RULES = [
   { brand: 'cloud', sub: 'شهبار', kw: ['شهبار', 'shahbar', 'shahbr'] },
   { brand: 'cloud', sub: 'ورق عنب عبلة', kw: ['ورق عنب', 'ورق العنب'] },
-  { brand: 'karazah', kw: ['كرزة', 'الجاذرينج', 'الجاذرينغ', 'فطور', 'غداء', 'عشاء', 'سحور', 'مؤثرين', 'بلوجر', 'البلوجر', 'عيد', 'كرمبلد', 'رمضان', 'ramadan', 'brek', 'منشورات الحساب', 'مقاطع', 'erani menu', 'ramdan', 'video views'] }
+  { brand: 'karazah', kw: ['كرزة', 'الجاذرينج', 'الجاذرينغ', 'فطور', 'غداء', 'عشاء', 'سحور', 'مؤثرين', 'بلوجر', 'البلوجر', 'عيد', 'كرمبلد', 'رمضان', 'ramadan', 'brek', 'منشورات الحساب', 'مقاطع', 'erani menu', 'ramdan', 'video views', 'mofrznat'] }
 ];
 const ttMatch = name => { const n = String(name || '').toLowerCase(); return TT_RULES.find(r => r.kw.some(w => n.includes(w.toLowerCase()))) || null };
 const fmt = (n, d = 0) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: d });
@@ -44,24 +44,29 @@ function collect(DB, today) {
   const brands = (DB.brandList && DB.brandList.length) ? DB.brandList : DEFAULT_BRANDS;
   const soon = addDays(today, 3);
   const out = {}; // brandId -> {now:[], soon:[]}
-  const shared = { now: [], soon: [] };
+  const shared = { now: [], soon: [], alerts: [] };
+  const back = addDays(today, -60);
+  const late = (box, p) => { const e = p.end || p.due; if (p.status !== 'done' && e && e < today && e >= back) box.alerts.push({ icon: '⏰', text: 'متأخر: ' + p.title + ' (انتهى ' + e + ')' }) };
   const put = (box, date, icon, text) => {
     if (!date) return;
     if (date === today) box.now.push({ icon, text, date });
     else if (date > today && date <= soon) box.soon.push({ icon, text, date });
   };
   (DB.sharedPlans || []).forEach(p => {
+    late(shared, p);
     put(shared, p.prep, '🛠', 'بدأ التحضير: ' + p.title);
     put(shared, p.due, '🚀', 'بدأ تنفيذ: ' + p.title);
     if (p.end && p.end !== p.due) put(shared, p.end, '🏁', 'آخر يوم تنفيذ: ' + p.title);
   });
   brands.forEach(b => {
-    const B = (DB.brands || {})[b.id] || {}, box = out[b.id] = { label: b.label, now: [], soon: [] };
+    const B = (DB.brands || {})[b.id] || {}, box = out[b.id] = { label: b.label, now: [], soon: [], alerts: [] };
     (B.plans || []).forEach(p => {
+      late(box, p);
       put(box, p.prep, '🛠', 'بدأ التحضير: ' + p.title);
       put(box, p.due, '🚀', 'بدأ تنفيذ: ' + p.title);
       if (p.end && p.end !== p.due) put(box, p.end, '🏁', 'آخر يوم تنفيذ: ' + p.title);
     });
+    (B.campaigns || []).forEach(c => { const bu = +c.budget || 0, sp = +c.spend || 0; if (bu > 0 && sp >= bu * 0.8) box.alerts.push({ icon: sp >= bu ? '⛔' : '⚠️', text: 'ميزانية «' + c.name + '»: صرف ' + fmt(sp) + ' من ' + fmt(bu) }); });
     (B.campaigns || []).forEach(c => put(box, c.start || c.date, '📣', 'بدأت حملة «' + c.name + '»' + (c.platform ? ' — ' + c.platform : '')));
     (B.posts || []).forEach(p => put(box, p.date, '🗓', (p.status === 'sent' ? 'نُشر منشور: ' : 'منشور مجدول: ') + p.text));
   });
@@ -71,7 +76,7 @@ function collect(DB, today) {
 function digestFor(user, col, stats) {
   const ids = user.admin ? Object.keys(col.out) : (user.brands || []).filter(id => col.out[id]);
   const sections = [];
-  const sec = (title, box) => { if (box.now.length || box.soon.length) sections.push({ title, box }) };
+  const sec = (title, box) => { if (box.now.length || box.soon.length || box.alerts.length) sections.push({ title, box }) };
   sec('كل البراندات (الخطة السنوية)', col.shared);
   ids.forEach(id => sec(col.out[id].label, col.out[id]));
   const adIds = ids.filter(id => stats && stats.res[id] && (stats.res[id].y.spend || stats.res[id].m.spend));
@@ -87,9 +92,27 @@ function digestFor(user, col, stats) {
   const html = `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:640px;margin:auto;color:#16262f">
   <h2 style="color:#023f5e;border-bottom:3px solid #023f5e;padding-bottom:8px">ملخص منصة التسويق</h2>
   <p>مرحبًا ${esc(user.name || '')}، هذا ملخص اليوم والأيام القادمة:</p>` +
-    adHtml + sections.map(s => `<h3 style="color:#023f5e;margin:18px 0 4px">${esc(s.title)}</h3>${list(s.box.now, 'اليوم')}${list(s.box.soon, 'قادم خلال 3 أيام')}`).join('') +
+    adHtml + sections.map(s => `<h3 style="color:#023f5e;margin:18px 0 4px">${esc(s.title)}</h3>${list(s.box.alerts, 'تنبيهات')}${list(s.box.now, 'اليوم')}${list(s.box.soon, 'قادم خلال 3 أيام')}`).join('') +
     `<p style="margin-top:20px"><a href="https://brandkuzama-droid.github.io/marketing-hub/">فتح المنصة</a></p></div>`;
-  return { html, count: sections.reduce((n, s) => n + s.box.now.length + s.box.soon.length, 0) + adIds.length };
+  return { html, count: sections.reduce((n, s) => n + s.box.now.length + s.box.soon.length + s.box.alerts.length, 0) + adIds.length };
+}
+
+function monthReport(DB, ym) {
+  const brands = (DB.brandList && DB.brandList.length) ? DB.brandList : DEFAULT_BRANDS;
+  const ms = ym + '-01', me = ym + '-31';
+  let h = '';
+  brands.forEach(b => {
+    const B = (DB.brands || {})[b.id] || {};
+    const camps = (B.campaigns || []).filter(c => { const a = c.start || c.date || '', e = c.end || c.date || ''; return a && a <= me && e >= ms });
+    const k = camps.reduce((o, c) => { o.sp += +c.spend || 0; o.im += +c.impressions || 0; o.ck += +c.clicks || 0; o.rs += +c.results || 0; o.rv += +c.revenue || 0; return o }, { sp: 0, im: 0, ck: 0, rs: 0, rv: 0 });
+    const posts = (B.posts || []).filter(p => (p.date || '').slice(0, 7) === ym && p.status === 'sent').length;
+    const plans = (B.plans || []).concat(DB.sharedPlans || []).filter(p => (p.due || '').slice(0, 7) === ym);
+    if (!camps.length && !posts && !plans.length) return;
+    const top = camps.slice().sort((x, y) => (+y.spend || 0) - (+x.spend || 0)).slice(0, 5);
+    h += `<h3 style="color:#023f5e;margin:18px 0 4px">${esc(b.label)}</h3><div style="background:#f5f8fa;border-radius:8px;padding:10px">${camps.length} حملة · صرف <b>${fmt(k.sp)}</b> · ظهور ${fmt(k.im)} · نقرات ${fmt(k.ck)} · نتائج ${fmt(k.rs)}${k.rv ? ' · إيراد ' + fmt(k.rv) + ' · ROAS ' + fmt(k.sp ? k.rv / k.sp : 0, 2) + 'x' : ''}<br>منشورات منشورة: ${posts} · بنود الخطة: ${plans.filter(p => p.status === 'done').length} مكتمل من ${plans.length}</div>` +
+      (top.length ? '<table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:13px"><tr style="color:#64757e"><td>أعلى الحملات</td><td>صرف</td><td>نتائج</td></tr>' + top.map(c => `<tr><td style="padding:4px 0;border-top:1px solid #eef2f4">${esc(c.name)}</td><td>${fmt(c.spend)}</td><td>${fmt(c.results)}</td></tr>`).join('') + '</table>' : '');
+  });
+  return h ? `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:640px;margin:auto;color:#16262f"><h2 style="color:#023f5e;border-bottom:3px solid #023f5e;padding-bottom:8px">التقرير الشهري — ${ym}</h2>${h}<p style="margin-top:20px"><a href="https://brandkuzama-droid.github.io/marketing-hub/">فتح المنصة</a></p></div>` : null;
 }
 
 async function main() {
@@ -114,7 +137,19 @@ async function main() {
     await tr.sendMail({ from: '"منصة التسويق" <' + process.env.GMAIL_USER + '>', to: u.email, subject: 'ملخص منصة التسويق — ' + today, html: d.html });
     sent++; console.log('sent to', u.email, d.count);
   }
+  // تقرير الشهر السابق (أول يوم من الشهر) — يوصل للمدير فقط
+  if (today.endsWith('-01') || process.env.MONTHLY === '1') {
+    const prev = addDays(today.slice(0, 8) + '01', -1).slice(0, 7), rep = monthReport(DB, prev);
+    if (rep && !dry) { await tr.sendMail({ from: '"منصة التسويق" <' + process.env.GMAIL_USER + '>', to: ADMIN.email, subject: 'التقرير الشهري — ' + prev, html: rep }); console.log('monthly report sent', prev) }
+    else console.log('monthly report', rep ? 'dry' : 'empty');
+  }
+  // نسخة احتياطية أسبوعية (الجمعة) للمدير
+  const dow = new Date(today + 'T12:00:00Z').getUTCDay();
+  if (dow === 5 || process.env.BACKUP === '1') {
+    if (!dry) { await tr.sendMail({ from: '"منصة التسويق" <' + process.env.GMAIL_USER + '>', to: ADMIN.email, subject: 'نسخة احتياطية — منصة التسويق ' + today, text: 'مرفق نسخة من بيانات المنصة (JSON). احتفظ بها في مكان آمن.', attachments: [{ filename: 'marketing-hub-backup-' + today + '.json', content: JSON.stringify(DB) }] }); console.log('backup sent') }
+    else console.log('backup dry');
+  }
   console.log('done', today, 'emails:', sent);
 }
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1) });
-module.exports = { collect, digestFor, ttMatch };
+module.exports = { collect, digestFor, ttMatch, monthReport };
