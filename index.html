@@ -361,10 +361,16 @@ function notifs(){
 }
 function seenKey(){return 'kz_hub_seen_'+(me?me.email:'')}
 function updateBell(){if(!me)return;const n=notifs(),seen=+localStorage.getItem(seenKey())||0,u=n.recent.filter(e=>e.ts>seen).length;const el=$('bellN');el.textContent=u>99?'99+':u;el.classList.toggle('hidden',!u)}
+function adSummary(){
+  const now=new Date(),ym=now.getFullYear()+'-'+p2(now.getMonth()+1),ms=ym+'-01',me=ym+'-'+p2(new Date(now.getFullYear(),now.getMonth()+1,0).getDate());
+  const rows=myBrands().map(b=>{const list=(bd(b.id).campaigns||[]).filter(c=>{const a=c.start||c.date||'',e=c.end||c.date||'';return a&&a<=me&&e>=ms});if(!list.length)return '';const k=kpis(list);
+    return `<div class="card item" data-act="goBrand" data-id="${b.id}" style="cursor:pointer;margin-bottom:6px;padding:10px;background:#f5f8fa"><div><div class="t" style="font-size:13px">📊 ${esc(b.label)} — الشهر الحالي</div><div class="m">صرف <b>${fmt(k.spend)}</b> · ظهور ${fmt(k.impressions)} · نقرات ${fmt(k.clicks)} · نتائج ${fmt(k.results)} · ${list.length} حملة</div></div></div>`}).join('');
+  return rows?`<div class="t" style="margin:6px 0">📊 تحديث الحملات</div>${rows}`:''
+}
 function notifModal(){
   const n=notifs(),seen=+localStorage.getItem(seenKey())||0;
   const row=(e,isNew)=>`<div class="card item" data-act="goBrand" data-id="${e.bid}" style="cursor:pointer;margin-bottom:6px;padding:10px;${isNew?'border-inline-start:4px solid var(--accent);background:var(--accent-light)':''}"><div><div class="t" style="font-size:13px">${e.icon} ${esc(e.text)}</div><div class="m">${esc(e.d)} · ${esc(e.lbl||'')}</div></div></div>`;
-  openModal(`<h2>🔔 الإشعارات</h2><div class="t" style="margin:6px 0">قادم خلال 7 أيام (${n.up.length})</div>${n.up.length?n.up.map(e=>row(e,false)).join(''):'<div class="empty">لا شيء قادم.</div>'}<div class="t" style="margin:12px 0 6px">آخر 14 يوم (${n.recent.length})</div>${n.recent.length?n.recent.map(e=>row(e,e.ts>seen)).join(''):'<div class="empty">لا توجد إشعارات.</div>'}<button data-act="close" style="margin-top:8px">إغلاق</button>`);
+  openModal(`<h2>🔔 الإشعارات</h2>${adSummary()}<div class="t" style="margin:6px 0">قادم خلال 7 أيام (${n.up.length})</div>${n.up.length?n.up.map(e=>row(e,false)).join(''):'<div class="empty">لا شيء قادم.</div>'}<div class="t" style="margin:12px 0 6px">آخر 14 يوم (${n.recent.length})</div>${n.recent.length?n.recent.map(e=>row(e,e.ts>seen)).join(''):'<div class="empty">لا توجد إشعارات.</div>'}<button data-act="close" style="margin-top:8px">إغلاق</button>`);
   localStorage.setItem(seenKey(),Date.now());updateBell()
 }
 

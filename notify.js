@@ -7,6 +7,39 @@ const ymd = d => new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(d);
 const addDays = (s, n) => { const d = new Date(s + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) };
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+
+const TT_RULES = [
+  { brand: 'cloud', sub: 'شهبار', kw: ['شهبار', 'shahbar', 'shahbr'] },
+  { brand: 'cloud', sub: 'ورق عنب عبلة', kw: ['ورق عنب', 'ورق العنب'] },
+  { brand: 'karazah', kw: ['كرزة', 'الجاذرينج', 'الجاذرينغ', 'فطور', 'غداء', 'عشاء', 'سحور', 'مؤثرين', 'بلوجر', 'البلوجر', 'عيد', 'كرمبلد', 'رمضان', 'ramadan', 'brek', 'منشورات الحساب', 'مقاطع', 'erani menu', 'ramdan', 'video views'] }
+];
+const ttMatch = name => { const n = String(name || '').toLowerCase(); return TT_RULES.find(r => r.kw.some(w => n.includes(w.toLowerCase()))) || null };
+const fmt = (n, d = 0) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: d });
+
+async function windsor(conn, from, to) {
+  const u = 'https://connectors.windsor.ai/' + conn + '?api_key=' + encodeURIComponent(process.env.WINDSOR_KEY) + '&date_from=' + from + '&date_to=' + to + '&fields=campaign,spend,impressions,clicks,date';
+  const r = await fetch(u, { signal: AbortSignal.timeout(600000) });
+  if (!r.ok) throw new Error(conn + ' HTTP ' + r.status);
+  const j = await r.json();
+  return j.data || [];
+}
+
+// يرجع { brandId: { ydate, y:{spend,imp,clk,camps:[{name,spend,imp,clk}]}, m:{spend,imp,clk} } }
+async function adStats(today) {
+  const y = addDays(today, -1), mStart = today.slice(0, 8) + '01';
+  const from = y < mStart ? addDays(mStart, -1) : mStart; // لو اليوم أول الشهر نجيب الشهر السابق لأمس فقط
+  const res = {}; const notes = [];
+  const add = (bid, name, d, r) => {
+    const b = res[bid] = res[bid] || { ydate: y, y: { spend: 0, imp: 0, clk: 0, camps: {} }, m: { spend: 0, imp: 0, clk: 0 } };
+    const sp = +r.spend || 0, im = +r.impressions || 0, ck = +r.clicks || 0;
+    if (d >= mStart && d <= y) { b.m.spend += sp; b.m.imp += im; b.m.clk += ck }
+    if (d === y) { b.y.spend += sp; b.y.imp += im; b.y.clk += ck; const c = b.y.camps[name] = b.y.camps[name] || { spend: 0, imp: 0, clk: 0 }; c.spend += sp; c.imp += im; c.clk += ck }
+  };
+  try { (await windsor('facebook', from, y)).forEach(r => r.campaign && add('karazah', r.campaign, r.date, r)) } catch (e) { notes.push('Meta: ' + e.message) }
+  try { (await windsor('tiktok', from, y)).forEach(r => { const rule = r.campaign && ttMatch(r.campaign); if (rule) add(rule.brand, r.campaign.trim(), r.date, r) }) } catch (e) { notes.push('TikTok: ' + e.message) }
+  return { res, notes };
+}
+
 function collect(DB, today) {
   const brands = (DB.brandList && DB.brandList.length) ? DB.brandList : DEFAULT_BRANDS;
   const soon = addDays(today, 3);
@@ -35,20 +68,28 @@ function collect(DB, today) {
   return { out, shared };
 }
 
-function digestFor(user, col) {
+function digestFor(user, col, stats) {
   const ids = user.admin ? Object.keys(col.out) : (user.brands || []).filter(id => col.out[id]);
   const sections = [];
   const sec = (title, box) => { if (box.now.length || box.soon.length) sections.push({ title, box }) };
   sec('كل البراندات (الخطة السنوية)', col.shared);
   ids.forEach(id => sec(col.out[id].label, col.out[id]));
-  if (!sections.length) return null;
+  const adIds = ids.filter(id => stats && stats.res[id] && (stats.res[id].y.spend || stats.res[id].m.spend));
+  if (!sections.length && !adIds.length) return null;
   const list = (arr, label) => arr.length ? `<div style="font-weight:700;margin:8px 0 4px">${label}</div>` + arr.map(e => `<div style="padding:5px 0;border-bottom:1px solid #eef2f4">${e.icon} ${esc(e.text)}${label.startsWith('قادم') ? ` <span style="color:#64757e">(${e.date})</span>` : ''}</div>`).join('') : '';
+
+  const adHtml = adIds.length ? '<h2 style="color:#023f5e;margin:22px 0 6px">📊 تحديث الحملات الإعلانية</h2>' + adIds.map(id => {
+    const a = stats.res[id], top = Object.entries(a.y.camps).sort((p, q) => q[1].spend - p[1].spend).filter(x => x[1].spend > 0).slice(0, 6);
+    return `<h3 style="color:#023f5e;margin:14px 0 4px">${esc(col.out[id] ? col.out[id].label : id)}</h3>
+    <div style="background:#f5f8fa;border-radius:8px;padding:10px">أمس (${a.ydate}): <b>صرف ${fmt(a.y.spend)}</b> · ظهور ${fmt(a.y.imp)} · نقرات ${fmt(a.y.clk)}<br>من بداية الشهر: <b>صرف ${fmt(a.m.spend)}</b> · ظهور ${fmt(a.m.imp)} · نقرات ${fmt(a.m.clk)}</div>` +
+      (top.length ? '<table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:13px"><tr style="color:#64757e"><td>الحملة</td><td>صرف أمس</td><td>ظهور</td><td>نقرات</td></tr>' + top.map(([n, c]) => `<tr><td style="padding:4px 0;border-top:1px solid #eef2f4">${esc(n)}</td><td>${fmt(c.spend)}</td><td>${fmt(c.imp)}</td><td>${fmt(c.clk)}</td></tr>`).join('') + '</table>' : '');
+  }).join('') + (stats.notes.length ? `<p style="color:#b45309;font-size:12px">ملاحظة: ${esc(stats.notes.join(' | '))}</p>` : '') : '';
   const html = `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:640px;margin:auto;color:#16262f">
   <h2 style="color:#023f5e;border-bottom:3px solid #023f5e;padding-bottom:8px">ملخص منصة التسويق</h2>
   <p>مرحبًا ${esc(user.name || '')}، هذا ملخص اليوم والأيام القادمة:</p>` +
-    sections.map(s => `<h3 style="color:#023f5e;margin:18px 0 4px">${esc(s.title)}</h3>${list(s.box.now, 'اليوم')}${list(s.box.soon, 'قادم خلال 3 أيام')}`).join('') +
+    adHtml + sections.map(s => `<h3 style="color:#023f5e;margin:18px 0 4px">${esc(s.title)}</h3>${list(s.box.now, 'اليوم')}${list(s.box.soon, 'قادم خلال 3 أيام')}`).join('') +
     `<p style="margin-top:20px"><a href="https://brandkuzama-droid.github.io/marketing-hub/">فتح المنصة</a></p></div>`;
-  return { html, count: sections.reduce((n, s) => n + s.box.now.length + s.box.soon.length, 0) };
+  return { html, count: sections.reduce((n, s) => n + s.box.now.length + s.box.soon.length, 0) + adIds.length };
 }
 
 async function main() {
@@ -57,6 +98,7 @@ async function main() {
   if (!r.ok) throw new Error('JSONBin HTTP ' + r.status);
   const DB = (await r.json()).record || {};
   const col = collect(DB, today);
+  const stats = process.env.WINDSOR_KEY ? await adStats(today) : null;
   const users = [ADMIN, ...(DB.users || []).filter(u => u.email)];
   const dry = process.env.DRY === '1';
   let tr = null;
@@ -66,7 +108,7 @@ async function main() {
   }
   let sent = 0;
   for (const u of users) {
-    const d = digestFor(u, col);
+    const d = digestFor(u, col, stats);
     if (!d) continue;
     if (dry) { console.log('[dry]', u.email, d.count, 'items'); continue; }
     await tr.sendMail({ from: '"منصة التسويق" <' + process.env.GMAIL_USER + '>', to: u.email, subject: 'ملخص منصة التسويق — ' + today, html: d.html });
@@ -75,4 +117,4 @@ async function main() {
   console.log('done', today, 'emails:', sent);
 }
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1) });
-module.exports = { collect, digestFor };
+module.exports = { collect, digestFor, ttMatch };
