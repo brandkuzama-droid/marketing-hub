@@ -60,7 +60,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px;borde
 
 <div class="app hidden" id="app">
   <header>
-    <div style="display:flex;align-items:center;gap:14px"><img src="logo-alkuzama.png" alt=""><div><h1>منصة التسويق</h1><span class="chip" id="whoChip"></span> <span class="chip" id="brandChip"></span></div></div>
+    <div style="display:flex;align-items:center;gap:14px"><img src="logo-alkuzama.png" alt=""><div><h1>منصة التسويق</h1><span class="chip" id="whoChip"></span> <span class="chip" id="brandChip"></span> <span id="budChip"></span></div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="bellBtn" style="position:relative">🔔 الإشعارات<span id="bellN" class="badge b-wip hidden" style="margin-inline-start:6px"></span></button><button id="brandsBtn" class="hidden">🏷️ البراندات</button><button id="usersBtn" class="hidden">👥 الموظفين</button><button id="switchBtn">🔀 تبديل البراند</button><button id="outBtn">خروج</button></div>
   </header>
   <div id="banner"></div>
@@ -214,7 +214,10 @@ function subBar(){
   return `<div class="tabs" style="margin-bottom:12px">${['all',...curSubs()].map(s=>`<div class="tab ${subFilter===s?'on':''}" data-sub="${esc(s)}" style="padding:6px 14px;font-size:12.5px">${s==='all'?'الكل':esc(s)}</div>`).join('')}</div>`
 }
 function subTag(x){return x.sub?`<span class="badge">${esc(x.sub)}</span>`:''}
-function render(){try{updateBell()}catch(e){}
+function monthSpend(bid){const n=new Date(),ym=n.getFullYear()+'-'+p2(n.getMonth()+1),ms=ym+'-01',me=ym+'-31';return (bd(bid).campaigns||[]).filter(c=>{const a=c.start||c.date||'',e=c.end||c.date||'';return a&&a<=me&&e>=ms}).reduce((t,c)=>t+num(c.spend),0)}
+function budChips(u){return (u.brands||[]).filter(id=>num((u.budgets||{})[id])>0).map(id=>{const bu=num(u.budgets[id]),sp=monthSpend(id),left=Math.max(0,Math.round((1-sp/bu)*100)),col=left<=10?'#c0392b':left<=30?'#d97706':'#1f9d55';return `<span class="chip" style="background:${col};color:#fff" title="صرف الشهر ${fmt(sp)} من ${fmt(bu)}">${esc(brandLabel(id))}: باقي ${left}% (${fmt(Math.max(0,bu-sp))} من ${fmt(bu)})</span>`}).join(' ')}
+function updateBud(){const el=$('budChip');if(!el)return;const u=me&&!me.admin?DB.users.find(x=>x.id===me.id):null;el.innerHTML=u?budChips(u):''}
+function render(){try{updateBell()}catch(e){}try{updateBud()}catch(e){}
   document.querySelectorAll('.tab[data-t]').forEach(t=>t.classList.toggle('on',t.dataset.t===tab));
   const v=$('view');
   v.innerHTML=subBar()+(tab==='plan'?planView():tab==='camp'?campView():resView());
@@ -330,14 +333,14 @@ function campForm(c){c=c||{};const plans=allPlans();
     logEv((c.id?'تعديل حملة: ':'إضافة حملة: ')+o.name+' ('+brandLabel(brand)+')');const arr=bd(brand).campaigns,i=arr.findIndex(x=>x.id===o.id);i>-1?arr[i]=o:arr.push(o);if(await save()){closeModal();render()}}
 }
 function usersModal(){
-  const rows=DB.users.map(u=>`<div class="card"><div class="item"><div><div class="t">${esc(u.name)}</div><div class="m">${esc(u.email)} · ${(u.brands||[]).map(brandLabel).join('، ')||'بدون براندات'}</div></div><div><button class="s" data-act="editUser" data-id="${u.id}">تعديل</button> <button class="s d" data-act="delUser" data-id="${u.id}">حذف</button></div></div></div>`).join('')||'<div class="empty">لا موظفين بعد.</div>';
+  const rows=DB.users.map(u=>`<div class="card"><div class="item"><div><div class="t">${esc(u.name)}</div><div class="m">${esc(u.email)} · ${(u.brands||[]).map(brandLabel).join('، ')||'بدون براندات'}</div><div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">${budChips(u)}</div></div><div><button class="s" data-act="editUser" data-id="${u.id}">تعديل</button> <button class="s d" data-act="delUser" data-id="${u.id}">حذف</button></div></div></div>`).join('')||'<div class="empty">لا موظفين بعد.</div>';
   openModal(`<h2>موظفو التسويق</h2>${rows}<div style="display:flex;gap:8px"><button class="p" data-act="addUser">+ موظف جديد</button><button data-act="close">إغلاق</button></div>`)
 }
 function userForm(u){u=u||{};
   openModal(`<h2>${u.id?'تعديل':'إضافة'} موظف</h2><form id="mf"><div class="field"><label>الاسم</label><input id="f_name" required value="${esc(u.name||'')}"></div><div class="field"><label>البريد</label><input type="email" id="f_email" required value="${esc(u.email||'')}"></div><div class="field"><label>كلمة السر</label><input id="f_pass" required value="${esc(u.password||'')}"></div>
-  <div class="field"><label>البراندات المسؤول عنها</label>${BRANDS.map(b=>`<label style="display:flex;gap:8px;align-items:center;color:var(--text)"><input type="checkbox" style="width:auto" class="f_b" value="${b.id}" ${(u.brands||[]).includes(b.id)?'checked':''}>${esc(b.label)}</label>`).join('')}</div>
+  <div class="field"><label>البراندات المسؤول عنها</label>${BRANDS.map(b=>`<label style="display:flex;gap:8px;align-items:center;color:var(--text)"><input type="checkbox" style="width:auto" class="f_b" value="${b.id}" ${(u.brands||[]).includes(b.id)?'checked':''}>${esc(b.label)}<input type="number" step="any" min="0" class="f_bud" data-b="${b.id}" placeholder="ميزانية شهرية" style="margin-inline-start:auto;width:130px" value="${(u.budgets||{})[b.id]||''}"></label>`).join('')}</div>
   <div style="display:flex;gap:8px"><button class="p">حفظ</button><button type="button" data-act="users">رجوع</button></div></form>`);
-  $('mf').onsubmit=async e=>{e.preventDefault();const o={id:u.id||uid(),name:$('f_name').value.trim(),email:$('f_email').value.trim().toLowerCase(),password:$('f_pass').value,brands:[...document.querySelectorAll('.f_b:checked')].map(x=>x.value)};
+  $('mf').onsubmit=async e=>{e.preventDefault();const o={id:u.id||uid(),name:$('f_name').value.trim(),email:$('f_email').value.trim().toLowerCase(),password:$('f_pass').value,brands:[...document.querySelectorAll('.f_b:checked')].map(x=>x.value)};o.budgets={};document.querySelectorAll('.f_bud').forEach(x=>{const v=num(x.value);if(v>0&&o.brands.includes(x.dataset.b))o.budgets[x.dataset.b]=v});
     if(DB.users.some(x=>x.email===o.email&&x.id!==o.id)){alert('الإيميل مستخدم');return}
     const i=DB.users.findIndex(x=>x.id===o.id);i>-1?DB.users[i]=o:DB.users.push(o);if(await save())usersModal()}
 }
