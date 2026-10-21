@@ -135,29 +135,51 @@ function showPicker(){
   $('brandBtns').innerHTML=mb.length?mb.map(b=>`<button class="brandbtn" data-b="${b.id}">${esc(b.label)}</button>`).join(''):'<div class="empty" style="grid-column:1/3">ما عندك براندات معيّنة. تواصل مع المدير.</div>';
   $('brandPick').classList.remove('hidden');
 }
-function pick(id){brand=id;subFilter='all';localStorage.setItem(BRAND_KEY,id);$('brandChip').textContent='البراند: '+brandLabel(id);$('brandPick').classList.add('hidden');render();if(id===SYNC_BRAND&&loaded&&localStorage.getItem(WKEY))syncMeta(true)}
+function pick(id){brand=id;subFilter='all';localStorage.setItem(BRAND_KEY,id);$('brandChip').textContent='البراند: '+brandLabel(id);$('brandPick').classList.add('hidden');render();if(syncable()&&loaded&&localStorage.getItem(WKEY))syncMeta(true)}
 
-/* ---------- Meta auto-sync (Windsor) ---------- */
-const WKEY='kz_hub_windsor_key', SYNC_BRAND='karazah', META_PLAT='Meta (فيس بوك/إنستجرام)';
+/* ---------- Auto-sync: Meta + TikTok (Windsor) ---------- */
+const WKEY='kz_hub_windsor_key', META_PLAT='Meta (فيس بوك/إنستجرام)', TT_PLAT='تيك توك';
+/* قواعد توزيع حملات TikTok (حساب Al Kuzama Trading co) على البراندات حسب كلمات اسم الحملة — الأولوية للأعلى */
+const TT_RULES=[
+ {brand:'cloud',sub:'شهبار',kw:['شهبار','shahbar','shahbr']},
+ {brand:'cloud',sub:'ورق عنب عبلة',kw:['ورق عنب','ورق العنب']},
+ {brand:'karazah',kw:['كرزة','الجاذرينج','الجاذرينغ','فطور','غداء','عشاء','سحور','مؤثرين','بلوجر','البلوجر','عيد','كرمبلد','رمضان','ramadan','brek','منشورات الحساب','مقاطع']}
+];
 let syncing=false,syncMsg='',syncRange='last_30d';
-function syncBox(){if(brand!==SYNC_BRAND)return '';return `<div class="card item" style="align-items:center"><div><div class="t">🔗 ربط تلقائي مع Meta</div><div class="m">${esc(syncMsg||'تُسحب الحملات من حساب karazah rest')}</div></div><div style="display:flex;gap:6px;align-items:center"><select id="syncRange" style="width:auto"><option value="last_7d" ${syncRange==='last_7d'?'selected':''}>آخر 7 أيام</option><option value="last_30d" ${syncRange==='last_30d'?'selected':''}>آخر 30 يوم</option><option value="last_90d" ${syncRange==='last_90d'?'selected':''}>آخر 90 يوم</option></select><button class="p" data-act="syncMeta" ${syncing?'disabled':''}>${syncing?'جاري السحب...':'🔄 تحديث'}</button><button class="s" data-act="winKey">المفتاح</button></div></div>`}
+function syncable(){return brand==='karazah'||TT_RULES.some(r=>r.brand===brand)}
+function syncBox(){if(!syncable())return '';return `<div class="card item" style="align-items:center"><div><div class="t">🔗 ربط تلقائي مع المنصات الإعلانية</div><div class="m">${esc(syncMsg||(brand==='karazah'?'Meta + تيك توك':'تيك توك'))}</div></div><div style="display:flex;gap:6px;align-items:center"><select id="syncRange" style="width:auto"><option value="last_7d" ${syncRange==='last_7d'?'selected':''}>آخر 7 أيام</option><option value="last_30d" ${syncRange==='last_30d'?'selected':''}>آخر 30 يوم</option><option value="last_90d" ${syncRange==='last_90d'?'selected':''}>آخر 90 يوم</option></select><button class="p" data-act="syncMeta" ${syncing?'disabled':''}>${syncing?'جاري السحب...':'🔄 تحديث'}</button><button class="s" data-act="winKey">المفتاح</button></div></div>`}
 function windsorKey(force){let k=localStorage.getItem(WKEY)||'';if(!k||force){k=(prompt('ألصق مفتاح Windsor API (من حسابك في Windsor.ai)',force?k:'')||'').trim();if(k)localStorage.setItem(WKEY,k)}return k}
+function ttMatch(name){const n=String(name||'').toLowerCase();for(const r of TT_RULES){if(r.kw.some(w=>n.includes(w.toLowerCase())))return r}return null}
+async function wfetch(k,conn,range,full,basic){
+  let r=await fetch('https://connectors.windsor.ai/'+conn+'?api_key='+encodeURIComponent(k)+'&date_preset='+range+'&fields='+full),isBasic=false;
+  if(!r.ok&&r.status!==401&&r.status!==403&&basic){r=await fetch('https://connectors.windsor.ai/'+conn+'?api_key='+encodeURIComponent(k)+'&date_preset='+range+'&fields='+basic);isBasic=true}
+  if(r.status==401||r.status==403)localStorage.removeItem(WKEY);
+  if(!r.ok)throw new Error(conn+': HTTP '+r.status);
+  const j=await r.json(),rows=j.data||j;if(!Array.isArray(rows))throw new Error('رد غير متوقع');return {rows,isBasic}
+}
+function upsert(B,o,basic){const i=B.campaigns.findIndex(c=>c.id===o.id);if(basic){delete o.results;delete o.revenue}if(i>-1)B.campaigns[i]={...B.campaigns[i],...o};else B.campaigns.push(o)}
 async function syncMeta(auto){
-  if(syncing||brand!==SYNC_BRAND)return;
+  if(syncing||!syncable())return;
   const k=auto?localStorage.getItem(WKEY):windsorKey();if(!k)return;
   const sel=$('syncRange'),range=sel?sel.value:syncRange;syncRange=range;
   syncing=true;syncMsg='جاري سحب الحملات...';render();
+  const notes=[];let total=0;
   try{
-    const u='https://connectors.windsor.ai/facebook?api_key='+encodeURIComponent(k)+'&date_preset='+range+'&fields=campaign,spend,impressions,clicks,actions_purchase,actions_lead,action_values_purchase,date';
-    const r=await fetch(u);if(r.status==401||r.status==403)localStorage.removeItem(WKEY);if(!r.ok)throw new Error('HTTP '+r.status);
-    const j=await r.json(),rows=j.data||j;if(!Array.isArray(rows))throw new Error('رد غير متوقع');
-    const agg={};rows.forEach(x=>{const n=x.campaign;if(!n)return;const a=agg[n]=agg[n]||{spend:0,impressions:0,clicks:0,results:0,revenue:0,last:'',first:''};
-      a.spend+=num(x.spend);a.impressions+=num(x.impressions);a.clicks+=num(x.clicks);a.results+=num(x.actions_purchase)+num(x.actions_lead);a.revenue+=num(x.action_values_purchase);
-      const d=x.date||'';if(d&&d>a.last)a.last=d;if(d&&(!a.first||d<a.first))a.first=d});
-    const B=bd(SYNC_BRAND);let n=0;
-    Object.keys(agg).forEach(name=>{const a=agg[name],id='meta:'+name;const o={id,name,platform:META_PLAT,date:a.last||new Date().toISOString().slice(0,10),spend:Math.round(a.spend*100)/100,impressions:a.impressions,clicks:a.clicks,results:a.results,revenue:Math.round(a.revenue*100)/100,link:'',auto:true,range};if(basic){delete o.results;delete o.revenue}
-      const i=B.campaigns.findIndex(c=>c.id===id);if(i>-1)B.campaigns[i]={...B.campaigns[i],...o};else B.campaigns.push(o);n++});
-    const ok=await save();syncMsg=ok?`تم تحديث ${n} حملة${basic?' (بدون النتائج والإيراد — إعادة المحاولة لاحقًا)':''} — ${new Date().toLocaleTimeString('ar-SA')}`:'تعذر حفظ النتائج'
+    const B=bd(brand);
+    if(brand==='karazah'){try{
+      const {rows,isBasic}=await wfetch(k,'facebook',range,'campaign,spend,impressions,clicks,actions_purchase,actions_lead,action_values_purchase,date','campaign,spend,impressions,clicks,date');
+      const agg={};rows.forEach(x=>{const n=x.campaign;if(!n)return;const a=agg[n]=agg[n]||{spend:0,impressions:0,clicks:0,results:0,revenue:0,last:''};a.spend+=num(x.spend);a.impressions+=num(x.impressions);a.clicks+=num(x.clicks);a.results+=num(x.actions_purchase)+num(x.actions_lead);a.revenue+=num(x.action_values_purchase);const d=x.date||'';if(d>a.last)a.last=d});
+      Object.keys(agg).forEach(name=>{const a=agg[name];upsert(B,{id:'meta:'+name,name,platform:META_PLAT,date:a.last||new Date().toISOString().slice(0,10),spend:Math.round(a.spend*100)/100,impressions:a.impressions,clicks:a.clicks,results:a.results,revenue:Math.round(a.revenue*100)/100,link:'',auto:true,range},isBasic);total++});
+      if(isBasic)notes.push('Meta بدون النتائج والإيراد');
+    }catch(e){notes.push('Meta فشل ('+e.message+')')}}
+    if(TT_RULES.some(r=>r.brand===brand)){try{
+      const {rows,isBasic}=await wfetch(k,'tiktok',range,'campaign,spend,impressions,clicks,conversion,date','campaign,spend,impressions,clicks,date');
+      const agg={};let skipped=0;rows.forEach(x=>{const n=x.campaign;if(!n)return;const rule=ttMatch(n);if(!rule){if(num(x.spend)>0)skipped++;return}if(rule.brand!==brand)return;
+        const a=agg[n]=agg[n]||{rule,spend:0,impressions:0,clicks:0,results:0,last:''};a.spend+=num(x.spend);a.impressions+=num(x.impressions);a.clicks+=num(x.clicks);a.results+=num(x.conversion);const d=x.date||'';if(d>a.last)a.last=d});
+      Object.keys(agg).forEach(name=>{const a=agg[name];if(!a.spend&&!a.impressions)return;upsert(B,{id:'tt:'+name,name:name.trim(),platform:TT_PLAT,date:a.last||new Date().toISOString().slice(0,10),spend:Math.round(a.spend*100)/100,impressions:a.impressions,clicks:a.clicks,results:a.results,link:'',auto:true,range,sub:a.rule.sub},isBasic);total++});
+      if(skipped)notes.push(skipped+' حملة تيك توك بدون تصنيف');
+    }catch(e){notes.push('تيك توك فشل ('+e.message+')')}}
+    const ok=await save();syncMsg=(ok?`تم تحديث ${total} حملة`:'تعذر حفظ النتائج')+(notes.length?' — '+notes.join('، '):'')+' — '+new Date().toLocaleTimeString('ar-SA')
   }catch(e){syncMsg='تعذر السحب: '+e.message}
   syncing=false;render()
 }
@@ -217,7 +239,7 @@ function resView(){
   const plans=filtered(bd(brand).plans),done=plans.filter(p=>p.status==='done').length;
   const card=(l,v)=>`<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div></div>`;
   const byP={};list.forEach(c=>{const p=c.platform||'أخرى';(byP[p]=byP[p]||[]).push(c)});
-  return syncBox()+`<div class="card" style="font-size:12.5px;color:var(--muted)">النتائج محسوبة تلقائيًا من الحملات المسجّلة. حملات Meta لبراند كرزة تُسحب تلقائيًا.</div>
+  return syncBox()+`<div class="card" style="font-size:12.5px;color:var(--muted)">النتائج محسوبة تلقائيًا من الحملات المسجّلة. حملات Meta وتيك توك تُسحب تلقائيًا.</div>
   <div class="grid">${card('إجمالي الصرف',fmt(k.spend))}${card('الظهور',fmt(k.impressions))}${card('النقرات',fmt(k.clicks))}${card('النتائج / التحويلات',fmt(k.results))}${card('CTR',fmt(k.ctr,2)+'%')}${card('CPC',fmt(k.cpc,2))}${card('CPM',fmt(k.cpm,2))}${card('تكلفة النتيجة',fmt(k.cpr,2))}${card('ROAS',fmt(k.roas,2)+'x')}${card('إنجاز الخطة',(plans.length?Math.round(done/plans.length*100):0)+'%')}${card('عدد الحملات',list.length)}</div>
   <div class="card"><div class="t" style="margin-bottom:8px">الأداء حسب المنصة</div>${list.length?`<table><tr><th>المنصة</th><th>حملات</th><th>صرف</th><th>نقرات</th><th>نتائج</th><th>تكلفة النتيجة</th></tr>${Object.keys(byP).map(p=>{const x=kpis(byP[p]);return `<tr><td>${esc(p)}</td><td>${byP[p].length}</td><td>${fmt(x.spend)}</td><td>${fmt(x.clicks)}</td><td>${fmt(x.results)}</td><td>${fmt(x.cpr,2)}</td></tr>`}).join('')}</table>`:'<div class="empty">لا بيانات.</div>'}</div>`
 }
