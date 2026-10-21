@@ -131,7 +131,7 @@ function showPicker(){
   $('brandBtns').innerHTML=mb.length?mb.map(b=>`<button class="brandbtn" data-b="${b.id}">${esc(b.label)}</button>`).join(''):'<div class="empty" style="grid-column:1/3">ما عندك براندات معيّنة. تواصل مع المدير.</div>';
   $('brandPick').classList.remove('hidden');
 }
-function pick(id){brand=id;subFilter='all';localStorage.setItem(BRAND_KEY,id);$('brandChip').textContent='البراند: '+brandLabel(id);$('brandPick').classList.add('hidden');render();if(syncable()&&loaded&&localStorage.getItem(WKEY))syncMeta(true)}
+function pick(id){brand=id;subFilter='all';localStorage.setItem(BRAND_KEY,id);$('brandChip').textContent='البراند: '+brandLabel(id);$('brandPick').classList.add('hidden');render();if(syncable()&&loaded&&localStorage.getItem(WKEY)&&Date.now()-num(localStorage.getItem('kz_hub_last_sync_'+id))>6*3600e3){localStorage.setItem('kz_hub_last_sync_'+id,Date.now());syncMeta(true)}}
 
 /* ---------- Auto-sync: Meta + TikTok (Windsor) ---------- */
 const WKEY='kz_hub_windsor_key', META_PLAT='Meta (فيس بوك/إنستجرام)', TT_PLAT='تيك توك';
@@ -158,16 +158,19 @@ function rangeChunks(range){
   return out
 }
 async function wfetch(k,conn,range,full,basic){
-  const rows=[];let isBasic=false;
-  for(const ch of rangeChunks(range)){
+  const chunks=rangeChunks(range);let isBasic=false;const res=new Array(chunks.length);let idx=0;
+  async function one(ch){
     const u=f=>'https://connectors.windsor.ai/'+conn+'?api_key='+encodeURIComponent(k)+'&'+ch.q+'&fields='+f;
     let r=await fetch(u(full));
     if(!r.ok&&r.status!==401&&r.status!==403&&basic){r=await fetch(u(basic));isBasic=true}
     if(r.status==401||r.status==403)localStorage.removeItem(WKEY);
     if(!r.ok)throw new Error(conn+': HTTP '+r.status);
-    const j=await r.json(),d=j.data||j;if(!Array.isArray(d))throw new Error('رد غير متوقع');rows.push(...d)
+    const j=await r.json(),d=j.data||j;if(!Array.isArray(d))throw new Error('رد غير متوقع');return d
   }
-  return {rows,isBasic}
+  let done=0;
+  async function worker(){while(idx<chunks.length){const i=idx++;res[i]=await one(chunks[i]);done++;if(chunks.length>1){syncMsg='جاري سحب '+conn+' ... '+done+'/'+chunks.length;const el=document.querySelector('#view .card .m');if(el&&syncing)el.textContent=syncMsg}}}
+  await Promise.all(Array.from({length:Math.min(4,chunks.length)},worker));
+  return {rows:res.flat(),isBasic}
 }
 function upsert(B,o,basic){const i=B.campaigns.findIndex(c=>c.id===o.id);if(basic){delete o.results;delete o.revenue}if(i>-1)B.campaigns[i]={...B.campaigns[i],...o};else B.campaigns.push(o)}
 async function syncMeta(auto){
