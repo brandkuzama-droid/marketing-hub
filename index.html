@@ -91,6 +91,7 @@ const num=v=>{const n=parseFloat(v);return isNaN(n)?0:n};
 const fmt=(n,d=0)=>Number(n).toLocaleString('en-US',{maximumFractionDigits:d});
 const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3);
 const brandLabel=id=>(BRANDS.find(b=>b.id===id)||{}).label||id;
+function allPlans(B){B=B||bd(brand);return [...B.plans,...(DB.sharedPlans||[])]}
 function bd(id){DB.brands[id]=DB.brands[id]||{plans:[],campaigns:[]};DB.brands[id].plans=DB.brands[id].plans||[];DB.brands[id].campaigns=DB.brands[id].campaigns||[];DB.brands[id].posts=DB.brands[id].posts||[];return DB.brands[id]}
 
 /* ---------- storage ---------- */
@@ -101,7 +102,7 @@ async function load(){
   try{const r=await fetch(BIN_URL+'/latest',{cache:'no-store',headers:{'X-Master-Key':k}});
     if(r.status==401||r.status==403){localStorage.removeItem(KEY_STORE);throw new Error('مفتاح غير صحيح')}
     if(!r.ok)throw new Error('HTTP '+r.status);
-    const j=await r.json();DB=j.record||{};DB.users=DB.users||[];DB.brands=DB.brands||{};BRANDS=(DB.brandList&&DB.brandList.length)?DB.brandList:DEFAULT_BRANDS;loaded=true;banner('')
+    const j=await r.json();DB=j.record||{};DB.users=DB.users||[];DB.brands=DB.brands||{};DB.sharedPlans=DB.sharedPlans||[];BRANDS=(DB.brandList&&DB.brandList.length)?DB.brandList:DEFAULT_BRANDS;loaded=true;banner('')
   }catch(e){loaded=false;banner('تعذر تحميل البيانات: '+e.message)}
 }
 async function save(){
@@ -229,7 +230,7 @@ function monthReport(ym){
   const B=bd(brand),nm={x:'X',fb:'فيسبوك',ig:'إنستجرام',tt:'تيك توك'},st={todo:'مخطط',wip:'جاري',done:'مكتمل'};
   const camps=filtered(B.campaigns).filter(c=>{const a=c.start||c.date||'',b=c.end||c.date||'';return a&&a<=me&&b>=ms}).sort((a,b)=>num(b.spend)-num(a.spend));
   const posts=(B.posts||[]).filter(p=>p.date>=ms&&p.date<=me).sort((a,b)=>a.date.localeCompare(b.date));
-  const plans=filtered(B.plans).filter(p=>(p.due||'').slice(0,7)===ym).sort((a,b)=>a.due.localeCompare(b.due));
+  const plans=filtered(allPlans(B)).filter(p=>(p.due||'').slice(0,7)===ym).sort((a,b)=>a.due.localeCompare(b.due));
   const k=kpis(camps),byP={};camps.forEach(c=>{const p=c.platform||'أخرى';(byP[p]=byP[p]||[]).push(c)});
   const kp=(l,v)=>`<div style="border:1px solid #dde5e9;border-radius:10px;padding:10px 12px"><div style="font-size:11px;color:#64757e">${l}</div><div style="font-size:18px;font-weight:800">${v}</div></div>`;
   const th='style="text-align:right;padding:6px;border-bottom:2px solid #023f5e;font-size:12px"',td='style="padding:6px;border-bottom:1px solid #dde5e9;font-size:12px;text-align:right;vertical-align:top"';
@@ -252,7 +253,7 @@ function exportPlan(){
   const from=m===null?y+'-01-01':y+'-'+p2(m+1)+'-01',to=m===null?y+'-12-31':y+'-'+p2(m+1)+'-'+p2(new Date(y,m+1,0).getDate());
   const st={todo:'مخطط',wip:'جاري',done:'مكتمل'},nm={x:'X',fb:'فيسبوك',ig:'إنستجرام',tt:'تيك توك'};
   const rows=[['النوع','من','إلى','العنوان','الحالة','المنصة / القنوات','المسؤول','الصرف','ملاحظات']];
-  filtered(B.plans).filter(p=>p.due&&p.due>=from&&p.due<=to).forEach(p=>rows.push(['بند خطة',p.due,p.due,p.title,st[p.status]||'',p.sub||'',p.owner||'','',p.notes||'']));
+  filtered(allPlans(B)).filter(p=>p.due&&p.due>=from&&p.due<=to).forEach(p=>rows.push(['بند خطة',p.due,p.due,p.title,st[p.status]||'',p.sub||'',p.owner||'','',p.notes||'']));
   filtered(B.campaigns).forEach(c=>{const s=c.start||c.date||'',e=c.end||c.date||'';if(s&&s<=to&&e>=from)rows.push(['حملة',s,e,c.name,'',c.platform||'','',c.spend||0,c.sub||''])});
   (B.posts||[]).filter(p=>p.date>=from&&p.date<=to).forEach(p=>rows.push(['منشور Buffer',p.date,p.date,p.text,p.status==='sent'?'تم النشر':'مجدول',(p.channels||[]).map(c=>nm[c]||c).join(' + '),'','','']));
   rows.sort((a,b)=>(a[0]==='النوع'?-1:b[0]==='النوع'?1:String(a[1]).localeCompare(String(b[1]))));
@@ -261,27 +262,27 @@ function exportPlan(){
   a.download='خطة-'+brandLabel(brand)+'-'+(m===null?y:y+'-'+p2(m+1))+'.csv';document.body.appendChild(a);a.click();a.remove();
 }
 function planView(){
-  const all=filtered(bd(brand).plans).slice().sort((a,b)=>(a.due||'').localeCompare(b.due||''));
-  const und=all.filter(p=>!p.due);const camps=filtered(bd(brand).campaigns).map(c=>({c,s:c.start||c.date||'',e:c.end||c.date||''})).filter(x=>x.s);const posts=(bd(brand).posts||[]);const postOn=k=>posts.filter(p=>p.date===k);const campOn=k=>camps.filter(x=>x.s<=k&&k<=x.e);const today=new Date(),tk=today.getFullYear()+'-'+p2(today.getMonth()+1)+'-'+p2(today.getDate());
+  const all=filtered(allPlans()).slice().sort((a,b)=>(a.due||'').localeCompare(b.due||''));
+  const und=all.filter(p=>!p.due);const planOn=k=>all.filter(p=>p.due&&p.due<=k&&k<=(p.end||p.due));const camps=filtered(bd(brand).campaigns).map(c=>({c,s:c.start||c.date||'',e:c.end||c.date||''})).filter(x=>x.s);const posts=(bd(brand).posts||[]);const postOn=k=>posts.filter(p=>p.date===k);const campOn=k=>camps.filter(x=>x.s<=k&&k<=x.e);const today=new Date(),tk=today.getFullYear()+'-'+p2(today.getMonth()+1)+'-'+p2(today.getDate());
   let h='';
   if(planMonth===null){
-    const yr=all.filter(p=>(p.due||'').slice(0,4)===String(planYear)),done=yr.filter(p=>p.status==='done').length,pct=yr.length?Math.round(done/yr.length*100):0;
+    const yr=all.filter(p=>(p.due||'').slice(0,4)===String(planYear)||(p.end||'').slice(0,4)===String(planYear)),done=yr.filter(p=>p.status==='done').length,pct=yr.length?Math.round(done/yr.length*100):0;
     h+=`<div class="card"><div class="item" style="align-items:center"><div style="display:flex;align-items:center;gap:10px"><button class="s" data-act="yr" data-d="-1">›</button><div class="t" style="font-size:20px">${planYear}</div><button class="s" data-act="yr" data-d="1">‹</button></div><div class="m">${done} من ${yr.length} مكتمل (${pct}%)</div><span style="display:flex;gap:6px;flex-wrap:wrap"><button class="p" data-act="addPlan">+ بند جديد</button></span></div><div class="bar"><i style="width:${pct}%"></i></div></div><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">`;
-    for(let m=0;m<12;m++){const cnt={};let n=0;yr.forEach(p=>{if(+p.due.slice(5,7)===m+1){cnt[+p.due.slice(8,10)]=(cnt[+p.due.slice(8,10)]||0)+1;n++}});
+    for(let m=0;m<12;m++){const cnt={};let n=0;const ids=new Set();for(let d=1;d<=new Date(planYear,m+1,0).getDate();d++){const l=planOn(planYear+'-'+p2(m+1)+'-'+p2(d));if(l.length){cnt[d]=l.length;l.forEach(p=>ids.add(p.id))}}n=ids.size;
       h+=`<div class="card" data-act="openM" data-m="${m}" style="margin:0;cursor:pointer"><div class="item" style="align-items:center;margin-bottom:8px"><div class="t">${MONTHS[m]}</div><span class="badge">${n} بند</span></div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;font-size:11px">${monthCells(planYear,m).map(d=>{const k=planYear+'-'+p2(m+1)+'-'+p2(d);return d?`<div style="padding:4px 0;border-radius:6px;${cnt[d]?'background:var(--accent);color:#fff;font-weight:700':d&&campOn(k).length?'background:var(--green-l);color:var(--green);font-weight:700':''}${d&&postOn(k).length?';box-shadow:inset 0 -3px 0 #7c5cd6':''}${k===tk?';outline:2px solid var(--green)':''}">${d}</div>`:'<div></div>'}).join('')}</div></div>`}
     h+='</div>';
   }else{
-    const m=planMonth,items=all.filter(p=>(p.due||'').slice(0,7)===planYear+'-'+p2(m+1));
+    const m=planMonth;
     h+=`<div class="card"><div class="item" style="align-items:center"><button class="s" data-act="yearV">← السنة كاملة</button><div style="display:flex;align-items:center;gap:10px"><button class="s" data-act="mv" data-d="-1">›</button><div class="t" style="font-size:20px">${MONTHS[m]} ${planYear}</div><button class="s" data-act="mv" data-d="1">‹</button></div><span style="display:flex;gap:6px;flex-wrap:wrap"><button class="p" data-act="addPlanM" data-m="${planYear}-${p2(m+1)}-01">+ بند جديد</button></span></div></div>
-    <div class="card" style="padding:8px;overflow-x:auto"><div style="display:grid;grid-template-columns:repeat(7,minmax(90px,1fr));gap:4px;min-width:660px">${DOW.map(d=>`<div style="text-align:center;font-size:12px;color:var(--muted);font-weight:700;padding:4px">${d}</div>`).join('')}${monthCells(planYear,m).map(d=>{if(!d)return '<div></div>';const k=planYear+'-'+p2(m+1)+'-'+p2(d),its=items.filter(p=>p.due===k);
-      return `<div data-act="addPlanM" data-m="${k}" style="min-height:92px;border:1px solid var(--border);border-radius:10px;padding:4px;cursor:pointer;${k===tk?'border:2px solid var(--accent);':''}"><div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:3px">${d}</div>${its.map(p=>`<div data-act="editPlan" data-id="${p.id}" title="${esc(p.title)}" style="${stCls(p.status)};font-size:11px;padding:3px 6px;border-radius:6px;margin-bottom:3px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(p.title)}</div>`).join('')}${campOn(k).slice(0,3).map(x=>`<div data-act="editCamp" data-id="${x.c.id}" title="${esc(x.c.name)} — ${esc(x.c.platform||'')}" style="background:var(--green-l);color:var(--green);border-inline-start:3px solid var(--green);font-size:11px;padding:2px 5px;border-radius:5px;margin-bottom:3px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">📣 ${esc(x.c.name)}</div>`).join('')}${campOn(k).length>3?`<div class="m" style="font-size:10px">+${campOn(k).length-3} حملات</div>`:''}${postOn(k).map(p=>`<div data-act="viewPost" data-id="${p.id}" title="${esc(p.text)}" style="background:#efe9fb;color:#5b3fa8;border-inline-start:3px solid #7c5cd6;font-size:11px;padding:2px 5px;border-radius:5px;margin-bottom:3px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">🗓 ${p.status==='sent'?'✓ ':''}${esc(p.text)}</div>`).join('')}</div>`}).join('')}</div></div>
+    <div class="card" style="padding:8px;overflow-x:auto"><div style="display:grid;grid-template-columns:repeat(7,minmax(90px,1fr));gap:4px;min-width:660px">${DOW.map(d=>`<div style="text-align:center;font-size:12px;color:var(--muted);font-weight:700;padding:4px">${d}</div>`).join('')}${monthCells(planYear,m).map(d=>{if(!d)return '<div></div>';const k=planYear+'-'+p2(m+1)+'-'+p2(d),its=planOn(k);
+      return `<div data-act="addPlanM" data-m="${k}" style="min-height:92px;border:1px solid var(--border);border-radius:10px;padding:4px;cursor:pointer;${k===tk?'border:2px solid var(--accent);':''}"><div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:3px">${d}</div>${its.map(p=>`<div data-act="editPlan" data-id="${p.id}" title="${esc(p.title)}" style="${stCls(p.status)};font-size:11px;padding:3px 6px;border-radius:6px;margin-bottom:3px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${k===p.due?'':'↳ '}${esc(p.title)}</div>`).join('')}${campOn(k).slice(0,3).map(x=>`<div data-act="editCamp" data-id="${x.c.id}" title="${esc(x.c.name)} — ${esc(x.c.platform||'')}" style="background:var(--green-l);color:var(--green);border-inline-start:3px solid var(--green);font-size:11px;padding:2px 5px;border-radius:5px;margin-bottom:3px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">📣 ${esc(x.c.name)}</div>`).join('')}${campOn(k).length>3?`<div class="m" style="font-size:10px">+${campOn(k).length-3} حملات</div>`:''}${postOn(k).map(p=>`<div data-act="viewPost" data-id="${p.id}" title="${esc(p.text)}" style="background:#efe9fb;color:#5b3fa8;border-inline-start:3px solid #7c5cd6;font-size:11px;padding:2px 5px;border-radius:5px;margin-bottom:3px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">🗓 ${p.status==='sent'?'✓ ':''}${esc(p.text)}</div>`).join('')}</div>`}).join('')}</div></div>
     <div class="m" style="margin-bottom:10px">اضغط على أي يوم لإضافة بند، وعلى البند لتعديله أو حذفه. <span class="badge">مخطط</span><span class="badge b-wip">جاري</span><span class="badge b-ok">مكتمل</span> · <span style="color:var(--green)">📣 = حملة (حسب تاريخها)</span> · <span style="color:#5b3fa8">🗓 = منشور مجدول في Buffer</span></div>`;
   }
   if(und.length)h+=`<div class="card" style="margin-top:12px"><div class="t" style="margin-bottom:6px">بنود بدون تاريخ <span class="badge">${und.length}</span></div>${und.map(p=>`<div class="item" style="padding:6px 0;border-top:1px solid var(--border)"><div class="t" style="font-size:13px">${esc(p.title)} ${subTag(p)}</div><div><button class="s" data-act="editPlan" data-id="${p.id}">تعديل</button> <button class="s d" data-act="delPlan" data-id="${p.id}">حذف</button></div></div>`).join('')}</div>`;
   return h
 }
 function campView(){
-  const plans=bd(brand).plans;
+  const plans=allPlans();
   const list=byMonth(filtered(bd(brand).campaigns)).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   return syncBox()+`<div class="card item"><div class="t">الحملات والأعمال المنفّذة</div><button class="p" data-act="addCamp">+ إضافة حملة / عمل</button></div>`+
   (list.length?list.map(c=>{const pl=plans.find(p=>p.id===c.planId);return `<div class="card item"><div><div class="t">${esc(c.name)} ${subTag(c)}<span class="badge">${esc(c.platform||'')}</span>${c.auto?'<span class="badge b-ok">تلقائي</span>':''}</div><div class="m">${esc(c.date||'')} · صرف ${fmt(c.spend)} · ظهور ${fmt(c.impressions)} · نقرات ${fmt(c.clicks)} · نتائج ${fmt(c.results)}${c.revenue?' · إيراد '+fmt(c.revenue):''}${pl?' · من الخطة: '+esc(pl.title):''}</div></div><div><button class="s" data-act="editCamp" data-id="${c.id}">تعديل</button> <button class="s d" data-act="delCamp" data-id="${c.id}">حذف</button></div></div>`}).join(''):'<div class="empty">ما فيه حملات مسجّلة بعد.</div>');
@@ -294,7 +295,7 @@ function kpis(list){
 }
 function resView(){
   const list=byMonth(filtered(bd(brand).campaigns)),k=kpis(list);
-  const plans=filtered(bd(brand).plans).filter(p=>!viewMonth||(p.due||'').slice(0,7)===viewMonth),done=plans.filter(p=>p.status==='done').length;
+  const plans=filtered(allPlans()).filter(p=>!viewMonth||(p.due||'').slice(0,7)===viewMonth),done=plans.filter(p=>p.status==='done').length;
   const card=(l,v)=>`<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div></div>`;
   const byP={};list.forEach(c=>{const p=c.platform||'أخرى';(byP[p]=byP[p]||[]).push(c)});
   return syncBox()+`<div class="card" style="font-size:12.5px;color:var(--muted)">النتائج محسوبة تلقائيًا من الحملات المسجّلة. حملات Meta وتيك توك تُسحب تلقائيًا.</div>
@@ -308,13 +309,13 @@ function closeModal(){$('modal').classList.add('hidden')}
 function subField(v){return curSubs().length?`<div class="field"><label>الفرع / المطعم الفرعي</label><select id="f_sub"><option value="">-- اختر --</option>${curSubs().map(s=>`<option ${v===s?'selected':''}>${esc(s)}</option>`).join('')}</select></div>`:''}
 function planForm(p,d){p=p||{};if(d&&!p.due)p.due=d;
   openModal(`<h2>${p.id?'تعديل':'إضافة'} بند خطة</h2><form id="mf"><div class="field"><label>البند</label><input id="f_title" required value="${esc(p.title||'')}"></div>${subField(p.sub)}
-  <div class="row"><div class="field"><label>تاريخ التنفيذ</label><input type="date" id="f_due" value="${esc(p.due||'')}"></div><div class="field"><label>الحالة</label><select id="f_status"><option value="todo" ${p.status==='todo'?'selected':''}>مخطط</option><option value="wip" ${p.status==='wip'?'selected':''}>جاري</option><option value="done" ${p.status==='done'?'selected':''}>مكتمل</option></select></div></div>
+  <div class="row"><div class="field"><label>بداية التنفيذ</label><input type="date" id="f_due" value="${esc(p.due||'')}"></div><div class="field"><label>نهاية التنفيذ</label><input type="date" id="f_end" value="${esc(p.end||'')}"></div></div><div class="row"><div class="field"><label>بداية التحضير</label><input type="date" id="f_prep" value="${esc(p.prep||'')}"></div><div class="field"><label>الحالة</label><select id="f_status"><option value="todo" ${p.status==='todo'?'selected':''}>مخطط</option><option value="wip" ${p.status==='wip'?'selected':''}>جاري</option><option value="done" ${p.status==='done'?'selected':''}>مكتمل</option></select></div></div>
   <div class="field"><label>المسؤول</label><input id="f_owner" value="${esc(p.owner||me.name)}"></div><div class="field"><label>ملاحظات</label><textarea id="f_notes" rows="2">${esc(p.notes||'')}</textarea></div>
   <div style="display:flex;gap:8px"><button class="p">حفظ</button><button type="button" data-act="close">إلغاء</button>${p.id?`<button type="button" class="s d" data-act="delPlan" data-id="${p.id}">حذف</button>`:''}</div></form>`);
-  $('mf').onsubmit=async e=>{e.preventDefault();const o={id:p.id||uid(),title:$('f_title').value.trim(),due:$('f_due').value,status:$('f_status').value,owner:$('f_owner').value.trim(),notes:$('f_notes').value.trim(),sub:$('f_sub')?$('f_sub').value:undefined};
-    const arr=bd(brand).plans,i=arr.findIndex(x=>x.id===o.id);i>-1?arr[i]=o:arr.push(o);if(await save()){closeModal();render()}}
+  $('mf').onsubmit=async e=>{e.preventDefault();const o={...p,id:p.id||uid(),title:$('f_title').value.trim(),due:$('f_due').value,end:$('f_end').value,prep:$('f_prep').value,status:$('f_status').value,owner:$('f_owner').value.trim(),notes:$('f_notes').value.trim(),sub:$('f_sub')?$('f_sub').value:undefined};
+    const sh=(DB.sharedPlans||[]).some(x=>x.id===o.id),arr=sh?DB.sharedPlans:bd(brand).plans,i=arr.findIndex(x=>x.id===o.id);i>-1?arr[i]=o:arr.push(o);if(await save()){closeModal();render()}}
 }
-function campForm(c){c=c||{};const plans=bd(brand).plans;
+function campForm(c){c=c||{};const plans=allPlans();
   openModal(`<h2>${c.id?'تعديل':'إضافة'} حملة / عمل</h2><form id="mf"><div class="field"><label>الاسم</label><input id="f_name" required value="${esc(c.name||'')}"></div>${subField(c.sub)}
   <div class="row"><div class="field"><label>المنصة</label><select id="f_plat">${PLATFORMS.map(x=>`<option ${c.platform===x?'selected':''}>${esc(x)}</option>`).join('')}</select></div><div class="field"><label>التاريخ</label><input type="date" id="f_date" value="${esc(c.date||'')}"></div></div>
   <div class="field"><label>مرتبطة ببند في الخطة</label><select id="f_plan"><option value="">-- بدون --</option>${plans.map(p=>`<option value="${p.id}" ${c.planId===p.id?'selected':''}>${esc(p.title)}</option>`).join('')}</select></div>
@@ -346,8 +347,8 @@ document.addEventListener('click',async e=>{
   if(t.dataset.sub){subFilter=t.dataset.sub;render();return}
   const a=t.dataset.act,id=t.dataset.id,B=bd(brand||'karazah');
   if(a==='close')closeModal();
-  else if(a==='addPlan')planForm();else if(a==='addPlanM')planForm(null,t.dataset.m);else if(a==='syncMeta')syncMeta(false);else if(a==='viewPost'){const p=(B.posts||[]).find(x=>x.id===id);if(p){const nm={x:'X (تويتر)',fb:'فيسبوك',ig:'إنستجرام',tt:'تيك توك'};openModal(`<h2>منشور Buffer</h2><div class="card"><div class="m">${esc(p.date)} · ${p.status==='sent'?'تم النشر':'مجدول'}</div><div style="margin:8px 0;white-space:pre-wrap">${esc(p.text)}</div><div class="m">القنوات: ${(p.channels||[]).map(c=>nm[c]||c).join('، ')}</div></div><button data-act="close">إغلاق</button>`)}}else if(a==='exportPlan')exportPlan();else if(a==='printPlan')monthReport();else if(a==='allMonths'){viewMonth='';render()}else if(a==='syncMonth'){const v=$('syncMonth').value;if(!v){alert('اختر الشهر أولًا');return}syncMonthVal=v;viewMonth=v;syncMeta(false,'m:'+v)}else if(a==='winKey')windsorKey(true);else if(a==='yr'){planYear+=+t.dataset.d;render()}else if(a==='openM'){planMonth=+t.dataset.m;render()}else if(a==='yearV'){planMonth=null;render()}else if(a==='mv'){planMonth+=+t.dataset.d;if(planMonth<0){planMonth=11;planYear--}if(planMonth>11){planMonth=0;planYear++}render()}else if(a==='editPlan')planForm(B.plans.find(x=>x.id===id));
-  else if(a==='delPlan'){if(confirm('حذف البند؟')){B.plans=B.plans.filter(x=>x.id!==id);if(await save()){closeModal();render()}}}
+  else if(a==='addPlan')planForm();else if(a==='addPlanM')planForm(null,t.dataset.m);else if(a==='syncMeta')syncMeta(false);else if(a==='viewPost'){const p=(B.posts||[]).find(x=>x.id===id);if(p){const nm={x:'X (تويتر)',fb:'فيسبوك',ig:'إنستجرام',tt:'تيك توك'};openModal(`<h2>منشور Buffer</h2><div class="card"><div class="m">${esc(p.date)} · ${p.status==='sent'?'تم النشر':'مجدول'}</div><div style="margin:8px 0;white-space:pre-wrap">${esc(p.text)}</div><div class="m">القنوات: ${(p.channels||[]).map(c=>nm[c]||c).join('، ')}</div></div><button data-act="close">إغلاق</button>`)}}else if(a==='exportPlan')exportPlan();else if(a==='printPlan')monthReport();else if(a==='allMonths'){viewMonth='';render()}else if(a==='syncMonth'){const v=$('syncMonth').value;if(!v){alert('اختر الشهر أولًا');return}syncMonthVal=v;viewMonth=v;syncMeta(false,'m:'+v)}else if(a==='winKey')windsorKey(true);else if(a==='yr'){planYear+=+t.dataset.d;render()}else if(a==='openM'){planMonth=+t.dataset.m;render()}else if(a==='yearV'){planMonth=null;render()}else if(a==='mv'){planMonth+=+t.dataset.d;if(planMonth<0){planMonth=11;planYear--}if(planMonth>11){planMonth=0;planYear++}render()}else if(a==='editPlan')planForm(allPlans(B).find(x=>x.id===id));
+  else if(a==='delPlan'){if(confirm('حذف البند؟')){B.plans=B.plans.filter(x=>x.id!==id);if(DB.sharedPlans)DB.sharedPlans=DB.sharedPlans.filter(x=>x.id!==id);if(await save()){closeModal();render()}}}
   else if(a==='addCamp')campForm();else if(a==='editCamp')campForm(B.campaigns.find(x=>x.id===id));
   else if(a==='delCamp'){if(confirm('حذف الحملة؟')){B.campaigns=B.campaigns.filter(x=>x.id!==id);if(await save())render()}}
   else if(a==='brands')brandsModal();else if(a==='addBrand')brandForm();else if(a==='editBrand')brandForm(BRANDS.find(x=>x.id===id));
