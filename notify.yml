@@ -1,0 +1,19 @@
+name: daily-notify
+on:
+  schedule:
+    - cron: '0 3 * * *'   # 06:00 بتوقيت الرياض
+  workflow_dispatch:
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install nodemailer
+      - run: node notify.js
+        env:
+          JSONBIN_KEY: ${{ secrets.JSONBIN_KEY }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
