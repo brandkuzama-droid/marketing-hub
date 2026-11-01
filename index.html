@@ -82,7 +82,7 @@ const ADMIN={email:'malik.khaleel@kuzama.co',password:'Aa727451@',name:'مالك
 const DEFAULT_BRANDS=[{id:'karazah',label:'كرزة',subs:[]},{id:'cloud',label:'المطاعم السحابية',subs:['لوزية','صندويشة زمان','شهبار','ورق عنب عبلة','شهرزاد','ميسور']},{id:'shahan',label:'شاهان',subs:[]}];
 let BRANDS=DEFAULT_BRANDS;
 function curSubs(){return (BRANDS.find(b=>b.id===brand)||{}).subs||[]}
-const PLATFORMS=['Meta (فيس بوك/إنستجرام)','تيك توك','سناب شات','جوجل','X (تويتر)','مؤثرين','أخرى'];
+const PLATFORMS=['Meta (فيس بوك/إنستجرام)','تيك توك','سناب شات','جوجل','X (تويتر)','مؤثرين','رسائل جماعية (واتساب)','أخرى'];
 let DB={users:[],brands:{}}, loaded=false, me=null, brand=null, tab='plan', subFilter='all';
 
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -291,7 +291,7 @@ function campView(){
   const plans=allPlans();
   const list=byMonth(filtered(bd(brand).campaigns)).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   return syncBox()+`<div class="card item"><div class="t">الحملات والأعمال المنفّذة</div><button class="p" data-act="addCamp">+ إضافة حملة / عمل</button></div>`+
-  (list.length?list.map(c=>{const pl=plans.find(p=>p.id===c.planId);return `<div class="card item"><div><div class="t">${esc(c.name)} ${subTag(c)}<span class="badge">${esc(c.platform||'')}</span>${c.auto?'<span class="badge b-ok">تلقائي</span>':''}</div><div class="m">${esc(c.date||'')} · صرف ${fmt(c.spend)}${c.budget?' من '+fmt(c.budget)+(num(c.spend)>=num(c.budget)?' ⛔ تجاوز':num(c.spend)>=num(c.budget)*0.8?' ⚠️ قارب':''):''} · ظهور ${fmt(c.impressions)} · نقرات ${fmt(c.clicks)} · نتائج ${fmt(c.results)}${c.revenue?' · إيراد '+fmt(c.revenue):''}${pl?' · من الخطة: '+esc(pl.title):''}</div></div><div><button class="s" data-act="editCamp" data-id="${c.id}">تعديل</button> <button class="s d" data-act="delCamp" data-id="${c.id}">حذف</button></div></div>`}).join(''):'<div class="empty">ما فيه حملات مسجّلة بعد.</div>');
+  (list.length?list.map(c=>{const pl=plans.find(p=>p.id===c.planId);return `<div class="card item"><div><div class="t">${esc(c.name)} ${subTag(c)}<span class="badge">${esc(c.platform||'')}</span>${c.auto?'<span class="badge b-ok">تلقائي</span>':''}</div><div class="m">${esc(c.date||'')} · صرف ${fmt(c.spend)}${c.budget?' من '+fmt(c.budget)+(num(c.spend)>=num(c.budget)?' ⛔ تجاوز':num(c.spend)>=num(c.budget)*0.8?' ⚠️ قارب':''):''} · ظهور ${fmt(c.impressions)} · نقرات ${fmt(c.clicks)} · نتائج ${fmt(c.results)}${c.revenue?' · إيراد '+fmt(c.revenue):''}${pl?' · من الخطة: '+esc(pl.title):''}${c.notes?' · '+esc(c.notes):''}</div></div><div><button class="s" data-act="editCamp" data-id="${c.id}">تعديل</button> <button class="s d" data-act="delCamp" data-id="${c.id}">حذف</button></div></div>`}).join(''):'<div class="empty">ما فيه حملات مسجّلة بعد.</div>');
 }
 function kpis(list){
   const s={spend:0,impressions:0,clicks:0,results:0,revenue:0};
