@@ -115,6 +115,46 @@ function monthReport(DB, ym) {
   return h ? `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:640px;margin:auto;color:#16262f"><h2 style="color:#023f5e;border-bottom:3px solid #023f5e;padding-bottom:8px">التقرير الشهري — ${ym}</h2>${h}<p style="margin-top:20px"><a href="https://brandkuzama-droid.github.io/marketing-hub/">فتح المنصة</a></p></div>` : null;
 }
 
+async function adRange(from, to) {
+  const res = {}, notes = [];
+  const add = (bid, name, r) => {
+    const b = res[bid] = res[bid] || { spend: 0, imp: 0, clk: 0, camps: {} };
+    const sp = +r.spend || 0, im = +r.impressions || 0, ck = +r.clicks || 0;
+    b.spend += sp; b.imp += im; b.clk += ck;
+    const c = b.camps[name] = b.camps[name] || { spend: 0, imp: 0, clk: 0 }; c.spend += sp; c.imp += im; c.clk += ck;
+  };
+  try { (await windsor('facebook', from, to)).forEach(r => r.campaign && add('karazah', r.campaign, r)) } catch (e) { notes.push('Meta: ' + e.message) }
+  try { (await windsor('tiktok', from, to)).forEach(r => { const rule = r.campaign && ttMatch(r.campaign); if (rule) add(rule.brand, r.campaign.trim(), r) }) } catch (e) { notes.push('TikTok: ' + e.message) }
+  return { res, notes };
+}
+
+function weeklyReport(DB, today, ads) {
+  const brands = (DB.brandList && DB.brandList.length) ? DB.brandList : DEFAULT_BRANDS;
+  const from = addDays(today, -7), to = addDays(today, -1), nextTo = addDays(today, 6);
+  const shared = DB.sharedPlans || [];
+  let h = '';
+  const upcoming = (plans) => plans.filter(p => (p.due && p.due >= today && p.due <= nextTo) || (p.prep && p.prep >= today && p.prep <= nextTo)).sort((a, b) => (a.due || a.prep).localeCompare(b.due || b.prep));
+  const sharedUp = upcoming(shared);
+  brands.forEach(b => {
+    const B = (DB.brands || {})[b.id] || {}, a = ads && ads.res[b.id];
+    const posts = (B.posts || []).filter(p => p.date >= from && p.date <= to && p.status === 'sent').length;
+    const sched = (B.posts || []).filter(p => p.date >= today && p.date <= nextTo).length;
+    const up = upcoming(B.plans || []);
+    const doneWk = (B.plans || []).concat(shared).filter(p => p.status === 'done' && (p.end || p.due) >= from && (p.end || p.due) <= to).length;
+    const late = (B.plans || []).concat(shared).filter(p => p.status !== 'done' && (p.end || p.due) && (p.end || p.due) < today && (p.end || p.due) >= addDays(today, -60)).length;
+    if (!a && !posts && !sched && !up.length) return;
+    const top = a ? Object.entries(a.camps).filter(x => x[1].spend > 0).sort((p, q) => q[1].spend - p[1].spend).slice(0, 5) : [];
+    h += `<h3 style="color:#023f5e;margin:18px 0 4px">${esc(b.label)}</h3>`;
+    if (a) h += `<div style="background:#f5f8fa;border-radius:8px;padding:10px">📊 صرف الأسبوع: <b>${fmt(a.spend)}</b> · ظهور ${fmt(a.imp)} · نقرات ${fmt(a.clk)}${a.imp ? ' · CTR ' + fmt(a.clk / a.imp * 100, 2) + '%' : ''}${a.clk ? ' · CPC ' + fmt(a.spend / a.clk, 2) : ''}</div>`;
+    if (top.length) h += '<table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:13px"><tr style="color:#64757e"><td>أعلى الحملات صرفًا</td><td>صرف</td><td>نقرات</td></tr>' + top.map(([n, c]) => `<tr><td style="padding:4px 0;border-top:1px solid #eef2f4">${esc(n)}</td><td>${fmt(c.spend)}</td><td>${fmt(c.clk)}</td></tr>`).join('') + '</table>';
+    h += `<div style="margin-top:6px">🗓 منشورات نُشرت: <b>${posts}</b> · مجدولة هذا الأسبوع: <b>${sched}</b> · بنود اكتملت: <b>${doneWk}</b>${late ? ' · <span style="color:#b45309">⏰ متأخرة: ' + late + '</span>' : ''}</div>`;
+    if (up.length) h += '<div style="font-weight:700;margin:8px 0 2px">قادم هذا الأسبوع</div>' + up.map(p => `<div style="padding:3px 0">${p.due >= today && p.due <= nextTo ? '🚀' : '🛠'} ${esc(p.title)} <span style="color:#64757e">(${p.due >= today && p.due <= nextTo ? p.due : p.prep})</span></div>`).join('');
+  });
+  if (sharedUp.length) h += '<h3 style="color:#023f5e;margin:18px 0 4px">الخطة السنوية — كل البراندات</h3>' + sharedUp.map(p => `<div style="padding:3px 0">${p.due >= today && p.due <= nextTo ? '🚀 بدء تنفيذ' : '🛠 بدء تحضير'}: ${esc(p.title)} <span style="color:#64757e">(${p.due >= today && p.due <= nextTo ? p.due : p.prep})</span></div>`).join('');
+  if (ads && ads.notes.length) h += `<p style="color:#b45309;font-size:12px">ملاحظة: ${esc(ads.notes.join(' | '))}</p>`;
+  return `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:640px;margin:auto;color:#16262f"><h2 style="color:#023f5e;border-bottom:3px solid #023f5e;padding-bottom:8px">التقرير الأسبوعي — ${from} إلى ${to}</h2>${h || '<p>لا توجد بيانات لهذا الأسبوع.</p>'}<p style="margin-top:20px"><a href="https://brandkuzama-droid.github.io/marketing-hub/">فتح المنصة</a></p></div>`;
+}
+
 async function main() {
   const today = process.env.TODAY || ymd(new Date());
   const r = await fetch('https://api.jsonbin.io/v3/b/' + BIN + '/latest', { headers: { 'X-Master-Key': process.env.JSONBIN_KEY } });
@@ -137,6 +177,17 @@ async function main() {
     await tr.sendMail({ from: '"منصة التسويق" <' + process.env.GMAIL_USER + '>', to: u.email, subject: 'ملخص منصة التسويق — ' + today, html: d.html });
     sent++; console.log('sent to', u.email, d.count);
   }
+  // التقرير الأسبوعي (الأحد) للإيميلات المحددة في المنصة
+  const recips = (DB.reportEmails || []).filter(x => x && x.email);
+  if ((new Date(today + 'T12:00:00Z').getUTCDay() === 0 || process.env.WEEKLY === '1') && recips.length) {
+    const ads = process.env.WINDSOR_KEY ? await adRange(addDays(today, -7), addDays(today, -1)) : null;
+    const html = weeklyReport(DB, today, ads);
+    for (const x of recips) {
+      if (dry) { console.log('[dry weekly]', x.email); continue; }
+      await tr.sendMail({ from: '"منصة التسويق" <' + process.env.GMAIL_USER + '>', to: x.email, subject: 'التقرير الأسبوعي — ' + today, html });
+      console.log('weekly sent to', x.email);
+    }
+  }
   // تقرير الشهر السابق (أول يوم من الشهر) — يوصل للمدير فقط
   if (today.endsWith('-01') || process.env.MONTHLY === '1') {
     const prev = addDays(today.slice(0, 8) + '01', -1).slice(0, 7), rep = monthReport(DB, prev);
@@ -152,4 +203,4 @@ async function main() {
   console.log('done', today, 'emails:', sent);
 }
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1) });
-module.exports = { collect, digestFor, ttMatch, monthReport };
+module.exports = { collect, digestFor, ttMatch, monthReport, weeklyReport };

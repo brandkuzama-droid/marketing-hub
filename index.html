@@ -61,7 +61,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px;borde
 <div class="app hidden" id="app">
   <header>
     <div style="display:flex;align-items:center;gap:14px"><img src="logo-alkuzama.png" alt=""><div><h1>منصة التسويق</h1><span class="chip" id="whoChip"></span> <span class="chip" id="brandChip"></span> <span id="budChip"></span></div></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="bellBtn" style="position:relative">🔔 الإشعارات<span id="bellN" class="badge b-wip hidden" style="margin-inline-start:6px"></span></button><button id="brandsBtn" class="hidden">🏷️ البراندات</button><button id="usersBtn" class="hidden">👥 الموظفين</button><button id="switchBtn">🔀 تبديل البراند</button><button id="outBtn">خروج</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="bellBtn" style="position:relative">🔔 الإشعارات<span id="bellN" class="badge b-wip hidden" style="margin-inline-start:6px"></span></button><button id="brandsBtn" class="hidden">🏷️ البراندات</button><button id="usersBtn" class="hidden">👥 الموظفين</button><button id="reportsBtn" class="hidden">📧 التقرير الأسبوعي</button><button id="switchBtn">🔀 تبديل البراند</button><button id="outBtn">خروج</button></div>
   </header>
   <div id="banner"></div>
   <div class="tabs" id="tabs">
@@ -126,7 +126,7 @@ async function start(user){
   me=user;localStorage.setItem(SESSION,me.email);
   $('login').classList.add('hidden');$('app').classList.remove('hidden');
   $('whoChip').textContent=me.name+(me.admin?' — مدير':' — موظف تسويق');
-  $('usersBtn').classList.toggle('hidden',!me.admin);$('brandsBtn').classList.toggle('hidden',!me.admin);
+  $('usersBtn').classList.toggle('hidden',!me.admin);$('brandsBtn').classList.toggle('hidden',!me.admin);$('reportsBtn').classList.toggle('hidden',!me.admin);
   const saved=localStorage.getItem(BRAND_KEY),mb=myBrands();
   if(saved&&mb.some(b=>b.id===saved))pick(saved);else if(mb.length===1)pick(mb[0].id);else showPicker();
 }
@@ -402,10 +402,18 @@ document.addEventListener('click',async e=>{
   else if(a==='delCamp'){if(confirm('حذف الحملة؟')){logEv('حذف حملة: '+((B.campaigns.find(x=>x.id===id)||{}).name||id)+' ('+brandLabel(brand)+')');B.campaigns=B.campaigns.filter(x=>x.id!==id);if(await save())render()}}
   else if(a==='brands')brandsModal();else if(a==='addBrand')brandForm();else if(a==='editBrand')brandForm(BRANDS.find(x=>x.id===id));
   else if(a==='delBrand'){if(confirm('حذف البراند؟ بياناته تبقى محفوظة لكنها لن تظهر.')){DB.brandList=BRANDS.filter(x=>x.id!==id);BRANDS=DB.brandList;if(await save())brandsModal()}}
-  else if(a==='users')usersModal();else if(a==='addUser')userForm();else if(a==='editUser')userForm(DB.users.find(x=>x.id===id));
+  else if(a==='delReport'){const x=(DB.reportEmails||[])[+id];if(x&&confirm('حذف '+x.email+'؟')){DB.reportEmails.splice(+id,1);logEv('حذف إيميل من التقرير الأسبوعي: '+x.email);if(await save())reportsModal()}}else if(a==='users')usersModal();else if(a==='addUser')userForm();else if(a==='editUser')userForm(DB.users.find(x=>x.id===id));
   else if(a==='delUser'){if(confirm('حذف الموظف؟')){DB.users=DB.users.filter(x=>x.id!==id);if(await save())usersModal()}}
 });
 document.addEventListener('change',e=>{if(e.target&&e.target.id==='syncMonth'){viewMonth=e.target.value||'';if(viewMonth)syncMonthVal=viewMonth;render()}});
+function reportsModal(){
+  const L=DB.reportEmails||[];
+  openModal(`<h2>📧 التقرير الأسبوعي</h2><div class="m" style="margin-bottom:10px">يصل كل أحد الساعة 6 صباحًا (توقيت الرياض) للإيميلات التالية: ملخص صرف الأسبوع الماضي لكل براند، المنشورات، البنود المكتملة والمتأخرة، وما هو قادم هذا الأسبوع.</div>
+  ${L.length?L.map((x,i)=>`<div class="card item" style="padding:10px"><div><div class="t" style="font-size:13px">${esc(x.name||x.email)}</div><div class="m">${esc(x.email)}</div></div><button class="s d" data-act="delReport" data-id="${i}">حذف</button></div>`).join(''):'<div class="empty">لا توجد إيميلات بعد.</div>'}
+  <form id="mf" style="margin-top:10px"><div class="row"><div class="field"><label>الاسم (اختياري)</label><input id="f_rn"></div><div class="field"><label>الإيميل</label><input type="email" id="f_re" required></div></div><div style="display:flex;gap:8px"><button class="p">+ إضافة</button><button type="button" data-act="close">إغلاق</button></div></form>`);
+  $('mf').onsubmit=async e=>{e.preventDefault();const em=$('f_re').value.trim().toLowerCase();DB.reportEmails=DB.reportEmails||[];if(DB.reportEmails.some(x=>x.email===em)){alert('الإيميل موجود');return}DB.reportEmails.push({name:$('f_rn').value.trim(),email:em});logEv('إضافة إيميل للتقرير الأسبوعي: '+em);if(await save())reportsModal()}
+}
+$('reportsBtn').onclick=reportsModal;
 $('bellBtn').onclick=notifModal;$('usersBtn').onclick=usersModal;$('brandsBtn').onclick=brandsModal;
 function brandsModal(){
   openModal(`<h2>إدارة البراندات</h2>${BRANDS.map(b=>`<div class="card item"><div><div class="t">${esc(b.label)}</div><div class="m">${(b.subs||[]).length?'فروع: '+esc(b.subs.join('، ')):'بدون فروع'}</div></div><div><button class="s" data-act="editBrand" data-id="${b.id}">تعديل</button> <button class="s d" data-act="delBrand" data-id="${b.id}">حذف</button></div></div>`).join('')}<div style="display:flex;gap:8px"><button class="p" data-act="addBrand">+ براند جديد</button><button data-act="close">إغلاق</button></div>`)
