@@ -128,8 +128,9 @@ async function adRange(from, to) {
   return { res, notes };
 }
 
-function weeklyReport(DB, today, ads) {
-  const brands = (DB.brandList && DB.brandList.length) ? DB.brandList : DEFAULT_BRANDS;
+function weeklyReport(DB, today, ads, only) {
+  let brands = (DB.brandList && DB.brandList.length) ? DB.brandList : DEFAULT_BRANDS;
+  if (only && only.length) brands = brands.filter(b => only.includes(b.id));
   const from = addDays(today, -7), to = addDays(today, -1), nextTo = addDays(today, 6);
   const shared = DB.sharedPlans || [];
   let h = '';
@@ -181,8 +182,8 @@ async function main() {
   const recips = (DB.reportEmails || []).filter(x => x && x.email);
   if ((new Date(today + 'T12:00:00Z').getUTCDay() === 0 || process.env.WEEKLY === '1') && recips.length) {
     const ads = process.env.WINDSOR_KEY ? await adRange(addDays(today, -7), addDays(today, -1)) : null;
-    const html = weeklyReport(DB, today, ads);
     for (const x of recips) {
+      const html = weeklyReport(DB, today, ads, x.brands);
       if (dry) { console.log('[dry weekly]', x.email); continue; }
       await tr.sendMail({ from: '"منصة التسويق" <' + process.env.GMAIL_USER + '>', to: x.email, subject: 'التقرير الأسبوعي — ' + today, html });
       console.log('weekly sent to', x.email);
