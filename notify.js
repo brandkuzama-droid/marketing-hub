@@ -156,10 +156,10 @@ function weeklyReport(DB, today, ads, only) {
   return `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:640px;margin:auto;color:#16262f"><h2 style="color:#023f5e;border-bottom:3px solid #023f5e;padding-bottom:8px">التقرير الأسبوعي — ${from} إلى ${to}</h2>${h || '<p>لا توجد بيانات لهذا الأسبوع.</p>'}<p style="margin-top:20px"><a href="https://brandkuzama-droid.github.io/marketing-hub/">فتح المنصة</a></p></div>`;
 }
 
-// بنود أسبوعية متكررة (DB.weeklyTemplates) تُضاف تلقائيًا لتبويب الحملات والأعمال كل أسبوع (الأسبوع يبدأ الأحد)
+// بنود أسبوعية متكررة (DB.weeklyTemplates) تُضاف تلقائيًا لتبويب الحملات والأعمال كل أسبوع (الأسبوع يبدأ الثلاثاء)
 function ensureWeekly(DB, today) {
   const dow = new Date(today + 'T12:00:00Z').getUTCDay();
-  const ws = addDays(today, -dow), we = addDays(ws, 6), added = [];
+  const ws = addDays(today, -((dow + 5) % 7)), we = addDays(ws, 6), added = [];
   (DB.weeklyTemplates || []).forEach(t => {
     DB.brands = DB.brands || {};
     const B = DB.brands[t.brand] = DB.brands[t.brand] || { plans: [], campaigns: [], posts: [] };
