@@ -156,11 +156,33 @@ function weeklyReport(DB, today, ads, only) {
   return `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:640px;margin:auto;color:#16262f"><h2 style="color:#023f5e;border-bottom:3px solid #023f5e;padding-bottom:8px">التقرير الأسبوعي — ${from} إلى ${to}</h2>${h || '<p>لا توجد بيانات لهذا الأسبوع.</p>'}<p style="margin-top:20px"><a href="https://brandkuzama-droid.github.io/marketing-hub/">فتح المنصة</a></p></div>`;
 }
 
+// بنود أسبوعية متكررة (DB.weeklyTemplates) تُضاف تلقائيًا لتبويب الحملات والأعمال كل أسبوع (الأسبوع يبدأ الأحد)
+function ensureWeekly(DB, today) {
+  const dow = new Date(today + 'T12:00:00Z').getUTCDay();
+  const ws = addDays(today, -dow), we = addDays(ws, 6), added = [];
+  (DB.weeklyTemplates || []).forEach(t => {
+    DB.brands = DB.brands || {};
+    const B = DB.brands[t.brand] = DB.brands[t.brand] || { plans: [], campaigns: [], posts: [] };
+    B.campaigns = B.campaigns || [];
+    const id = 'wk:' + t.id + ':' + ws;
+    if (B.campaigns.some(c => c.id === id)) return;
+    B.campaigns.push({ id, name: t.name, platform: t.platform || 'مؤثرين', date: ws, start: ws, end: we, spend: 0, impressions: 0, clicks: 0, results: 0, revenue: 0, weekly: true, sub: t.sub });
+    added.push(t.name);
+  });
+  return added;
+}
+
 async function main() {
   const today = process.env.TODAY || ymd(new Date());
   const r = await fetch('https://api.jsonbin.io/v3/b/' + BIN + '/latest', { headers: { 'X-Master-Key': process.env.JSONBIN_KEY } });
   if (!r.ok) throw new Error('JSONBin HTTP ' + r.status);
   const DB = (await r.json()).record || {};
+  const addedWk = ensureWeekly(DB, today);
+  if (addedWk.length && process.env.DRY !== '1') {
+    const w = await fetch('https://api.jsonbin.io/v3/b/' + BIN, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Master-Key': process.env.JSONBIN_KEY }, body: JSON.stringify(DB) });
+    if (!w.ok) throw new Error('JSONBin PUT HTTP ' + w.status);
+    console.log('weekly items added:', addedWk.join(' | '));
+  }
   const col = collect(DB, today);
   const stats = process.env.WINDSOR_KEY ? await adStats(today) : null;
   const users = [ADMIN, ...(DB.users || []).filter(u => u.email)];
@@ -204,4 +226,4 @@ async function main() {
   console.log('done', today, 'emails:', sent);
 }
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1) });
-module.exports = { collect, digestFor, ttMatch, monthReport, weeklyReport };
+module.exports = { ensureWeekly, collect, digestFor, ttMatch, monthReport, weeklyReport };
