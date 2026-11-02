@@ -166,7 +166,7 @@ function ensureWeekly(DB, today) {
     B.campaigns = B.campaigns || [];
     const id = 'wk:' + t.id + ':' + ws;
     if (B.campaigns.some(c => c.id === id)) return;
-    B.campaigns.push({ id, name: t.name, platform: t.platform || 'مؤثرين', date: ws, start: ws, end: we, spend: 0, impressions: 0, clicks: 0, results: +t.results || 0, revenue: 0, notes: t.notes || '', weekly: true, sub: t.sub });
+    B.campaigns.push({ id, name: t.name, platform: t.platform || 'مؤثرين', date: ws, start: ws, end: we, spend: +t.spend || 0, impressions: 0, clicks: 0, results: +t.results || 0, revenue: 0, notes: t.notes || '', weekly: true, sub: t.sub });
     added.push(t.name);
   });
   return added;
